@@ -28,8 +28,8 @@
 | :--- | :--- | :--- | :--- |
 | **Slice 1** | Project Skeleton & Baseline Test Harness | Directory layout (`backend/`, `frontend/`, `deploy/`), exact pinned dependencies, `pytest` setup, verified frontend build | **APPROVED** |
 | **Slice 2** | Single Ball Resolution Engine | Pure function `resolve_ball(bat, bowl) -> BallResult` (1–6 matching rules) | **APPROVED** |
-| **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | **COMPLETED (Awaiting Review)** |
-| **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | NOT STARTED |
+| **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | **APPROVED** |
+| **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | **COMPLETED (Awaiting Review)** |
 | **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | NOT STARTED |
 | **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | NOT STARTED |
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | NOT STARTED |
@@ -127,7 +127,7 @@
 
 ### Slice 3: Batsman Lifecycle & Score Tracking
 
-* **Status**: COMPLETED (Awaiting Review)
+* **Status**: APPROVED
 * **Timestamp**: 2026-09-12T22:52:00+05:30
 * **What was implemented**:
   * Pure domain model `BattingState` in `backend/app/engine/batting.py`.
@@ -168,5 +168,52 @@
   * Maintained defensive copies on all dictionary and list property getters.
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+### Slice 4: Over & Innings Progression
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-12T23:01:00+05:30
+* **What was implemented**:
+  * Pure domain model `Innings` in `backend/app/engine/innings.py`.
+  * Over and ball tracking:
+    * 1-indexed `current_over` (initial=1, max=5).
+    * `balls_in_current_over` (0 to 5; resets to 0 after 6 valid balls).
+    * `total_balls` completed (0 to 30).
+  * Encapsulates `BattingState` and delegates single-ball scoring, wickets, and strike rotation to it.
+  * Single authoritative mutation entry point `record_ball(ball_result: BallResult)`:
+    1. Guard: Rejects any ball if innings is complete by raising `InningsCompleteError`.
+    2. Type Validation: Validates `ball_result` is an instance of `BallResult` (raises `TypeError` otherwise).
+    3. Batting State Mutation: Passes `ball_result` to `batting_state.record_ball()`.
+    4. Counter Increments: Increments `balls_in_current_over` and `total_balls`.
+    5. Innings Completion Check: Evaluates `total_balls == max_balls (30)` OR `batting_state.striker is None` (all-out) $\rightarrow$ sets `innings_complete = True`.
+    6. Over Completion Check: If `balls_in_current_over == balls_per_over (6)`, resets `balls_in_current_over = 0` and increments `current_over += 1` if and only if the innings is not complete.
+  * Domain boundaries & invariant guarantees:
+    * No 6th over is created: on the 30th ball (over 5, ball 6), `current_over` remains 5.
+    * Wickets count as legal completed balls for both over and innings tallies.
+    * Wicket on ball 30 counts as ball 30 and marks the innings complete.
+    * Premature all-out (when no striker remains) immediately completes the innings.
+    * Calls to `record_ball()` after innings completion are rejected with `InningsCompleteError`.
+    * No automatic strike rotation at over end: striker and non-striker ends are preserved across over boundaries unless swapped by odd runs or wickets in `BattingState`.
+  * Read-only properties exposed:
+    * `current_over`, `balls_in_current_over`, `total_balls`, `max_overs`, `balls_per_over`, `max_balls`.
+    * `innings_complete`, `is_completed`.
+    * `over_complete` & `is_over_complete`: Semantics clarified: True if the most recently recorded ball completed an over (does not mean the currently active over is complete).
+    * `batting_state` and delegating properties `striker`, `non_striker`, `total_runs`, `wickets`.
+  * Comprehensive test suite in `backend/tests/test_innings_engine.py` (37 tests) covering initial state, 1-ball, 6-ball over, 7th ball, 12 balls, 14 balls, 30 balls, wickets as legal balls, all-out boundaries, post-completion rejection, sequential integration, boundary limits, strict retention of strike at over ends, instance isolation, clarified `over_complete` semantics, and type safety.
+* **Files Created / Modified**:
+  * `backend/app/engine/innings.py`
+  * `backend/tests/test_innings_engine.py`
+* **Tests Executed**:
+  * Command: `pytest -v` from repository root $\rightarrow$ PASS (127 passed in 1.66s). All 3 Slice 1 sanity tests + 55 Slice 2 ball tests + 32 Slice 3 batting tests + 37 Slice 4 innings tests passed cleanly.
+* **Decisions Made**:
+  * `Innings` encapsulates `BattingState` and does not duplicate batting scores, wickets, or striker rotation.
+  * Used exact `==` checks for `total_balls == max_balls` and `balls_in_current_over == balls_per_over` invariants.
+  * Documented and tested `over_complete` semantics: signifies the event that the ball just recorded completed an over.
+  * Kept strike rotation strictly governed by `BattingState` (odd runs and wickets). Explicitly prohibited automatic strike swaps merely because an over ended.
+  * Subclassed `InningsCompleteError` from `InningsError(ValueError)` for domain-specific error handling.
+  * Allowed optional dependency injection of `BattingState` in `Innings.__init__` while defaulting to standard 11-player lineup.
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
