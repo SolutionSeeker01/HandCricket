@@ -30,7 +30,7 @@
 | **Slice 2** | Single Ball Resolution Engine | Pure function `resolve_ball(bat, bowl) -> BallResult` (1–6 matching rules) | **APPROVED** |
 | **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | **APPROVED** |
 | **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | **COMPLETED (Awaiting Review)** |
-| **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | NOT STARTED |
+| **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | **COMPLETED (Awaiting Review)** |
 | **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | NOT STARTED |
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | NOT STARTED |
 | **Slice 8** | Headless Computer Player (Bot) | Bot choosing 1–6 and picking bowlers; 100-match automated Bot vs Bot simulation | NOT STARTED |
@@ -244,6 +244,58 @@
   * Strictly adhered to Slices 1–4 scope; zero Slice 5 features introduced.
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+### Slice 5: Bowler Quota Enforcement
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-12T23:30:00+05:30
+* **What was implemented**:
+  * Created pure domain engine module `backend/app/engine/bowling.py`:
+    * Domain exceptions: `BowlingError`, `InvalidBowlerError`, `BowlerAlreadyBowledError`, `BowlingLifecycleError`.
+    * `BowlingState` class managing bowler roster (`DEFAULT_TEAM_SIZE = 11`), over limits (`DEFAULT_MAX_OVERS = 5`), active bowler lifecycle, and quota enforcement (each bowler can bowl at most one over per innings).
+    * `BowlingStateView` read-only query view providing inspecting properties while strictly omitting mutators (`select_bowler`, `complete_over`).
+    * Invariants strictly enforced:
+      * `used_bowlers ⊆ valid_bowlers`
+      * `used_bowlers contains no duplicates`
+      * `eligible_bowlers = valid_bowlers - used_bowlers`
+      * Bowler is marked used immediately upon selection (`select_bowler`), ensuring they cannot be selected again even if an over ends prematurely.
+      * Over advance: `complete_over()` clears active bowler and advances over progression.
+      * Rejection of duplicate bowler selection (`BowlerAlreadyBowledError`).
+      * Rejection of selection while over in progress (`BowlingLifecycleError`).
+      * Rejection of selection when all 5 overs are assigned/completed (`BowlingLifecycleError`).
+      * Rejection of completing when no over is active (`BowlingLifecycleError`).
+      * Defensive validation of bowler IDs (rejects bool, non-int, and out-of-range $<1$ or $>team\_size$).
+      * Defensive copies returned for all collections (`used_bowlers`, `eligible_bowlers`, `over_bowlers`).
+  * Created test suite `backend/tests/test_bowling_engine.py` (46 tests):
+    * Initial state verification (0 completed, 1 current, 11 eligible, none used).
+    * Valid bowler selection and over mapping.
+    * Duplicate bowler selection rejection.
+    * Over concurrency rejection (attempting to select while over active).
+    * Over completion lifecycle and counter advancement.
+    * Full 5-over sequence with 5 distinct bowlers, verifying quota completion and rejection of a 6th over.
+    * Out-of-range and invalid type bowler ID rejection (including booleans).
+    * Constructor validation (`team_size < max_overs`, non-integers, booleans).
+    * Defensive copies and state protection.
+    * Read-only view protection (`BowlingStateView`).
+    * Instance isolation.
+* **Files Added / Modified**:
+  * `backend/app/engine/bowling.py` (New)
+  * `backend/tests/test_bowling_engine.py` (New)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Command: `pytest -v` from repository root $\rightarrow$ PASS (192 passed in 2.19s).
+  * 3 sanity tests + 71 ball tests + 33 batting tests + 39 innings tests + 46 bowling tests = 192 tests total.
+* **Decisions Made**:
+  * Kept `BowlingState` as an independent domain engine component, preserving `Innings` completely intact and maintaining zero coupling/regression risk.
+  * Marked a bowler as "used" immediately upon `select_bowler()` assignment to guarantee that an over aborted by an all-out dismissal still accounts for that bowler's quota.
+* **Explicitly Deferred Work**:
+  * Full match coordination / target chasing (Slice 6).
+  * Predefined teams / toss mechanics (Slice 7).
+  * Computer player / bot decision making (Slice 8).
+  * Turn timers, WebSockets, and UI integration (Slices 9–15).
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
 
