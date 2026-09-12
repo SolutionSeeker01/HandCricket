@@ -7,6 +7,7 @@ from backend.app.engine.ball import BallResult, resolve_ball
 from backend.app.engine.batting import (
     BattingLifecycleError,
     BattingState,
+    BattingStateView,
     InvalidBatsmanError,
     NoAvailableBatsmanError,
 )
@@ -133,6 +134,9 @@ def test_wicket_dismisses_striker_and_brings_next_batsman():
     assert state.non_striker == 2
     # Next waiting batsman is now 4
     assert state.next_batsman_id == 4
+    # Arriving batsman (3) initial stats must be explicitly 0 (M4)
+    assert state.get_batsman_score(3) == 0
+    assert state.get_batsman_balls(3) == 0
 
 
 def test_consecutive_wickets():
@@ -295,3 +299,29 @@ def test_ball_result_cannot_be_corrupted():
 
     with pytest.raises(FrozenInstanceError):
         ball.runs = 100  # type: ignore
+
+
+def test_batting_state_view_read_only_protection():
+    """BattingStateView provides read access but does not expose mutation methods like record_ball."""
+    state = BattingState()
+    state.record_ball(resolve_ball(4, 2))
+    view = state.as_view()
+
+    # Query properties match
+    assert view.striker == 1
+    assert view.non_striker == 2
+    assert view.total_runs == 4
+    assert view.wickets == 0
+    assert view.team_size == 11
+    assert view.next_batsman_id == 3
+    assert view.balls_processed == 1
+    assert view.get_batsman_score(1) == 4
+    assert view.get_batsman_balls(1) == 1
+    assert view.is_dismissed(1) is False
+    assert len(view.individual_scores) == 11
+
+    # View has NO record_ball method
+    assert not hasattr(view, "record_ball")
+    with pytest.raises(AttributeError):
+        view.record_ball(resolve_ball(1, 2))  # type: ignore
+

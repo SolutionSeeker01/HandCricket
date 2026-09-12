@@ -94,7 +94,12 @@ class BattingState:
 
     @property
     def balls_processed(self) -> int:
-        """Total number of balls recorded in this batting innings."""
+        """Total number of balls recorded in this batting state.
+
+        Note: This counter provides batting-domain bookkeeping (e.g. tracking balls
+        faced across batsmen). In match play, Innings.total_balls is the authoritative
+        innings-level ball count.
+        """
         return self._balls_processed
 
     @property
@@ -201,3 +206,89 @@ class BattingState:
             if runs % 2 != 0:
                 if self._non_striker is not None:
                     self._striker, self._non_striker = self._non_striker, self._striker
+
+    def as_view(self) -> "BattingStateView":
+        """Return a read-only query view of this batting state."""
+        return BattingStateView(self)
+
+
+class BattingStateView:
+    """Read-only query view over a BattingState instance.
+
+    This view exposes read-only properties and query methods for inspecting the batting
+    lineup, individual scores, and wickets, without exposing the mutating `record_ball()`
+    method. Higher layers (such as Innings) expose this view to prevent callers from
+    bypassing authoritative match progression.
+    """
+
+    def __init__(self, state: BattingState) -> None:
+        self._state = state
+
+    @property
+    def team_size(self) -> int:
+        """Total number of players in the batting lineup."""
+        return self._state.team_size
+
+    @property
+    def striker(self) -> Optional[int]:
+        """ID of the current active batsman facing the ball, or None if all out."""
+        return self._state.striker
+
+    @property
+    def non_striker(self) -> Optional[int]:
+        """ID of the current active batsman at the non-striker end."""
+        return self._state.non_striker
+
+    @property
+    def next_batsman_id(self) -> int:
+        """ID of the next batsman waiting to enter."""
+        return self._state.next_batsman_id
+
+    @property
+    def total_runs(self) -> int:
+        """Total cumulative runs scored by the batting team."""
+        return self._state.total_runs
+
+    @property
+    def wickets(self) -> int:
+        """Total number of wickets lost."""
+        return self._state.wickets
+
+    @property
+    def balls_processed(self) -> int:
+        """Total number of balls recorded in this batting state."""
+        return self._state.balls_processed
+
+    @property
+    def individual_scores(self) -> Dict[int, int]:
+        """Copy of individual scores for all batsmen."""
+        return self._state.individual_scores
+
+    @property
+    def balls_faced(self) -> Dict[int, int]:
+        """Copy of balls faced by each batsman."""
+        return self._state.balls_faced
+
+    @property
+    def dismissed_batsmen(self) -> List[int]:
+        """Copy of the list of dismissed batsmen in order of dismissal."""
+        return self._state.dismissed_batsmen
+
+    def is_dismissed(self, batsman_id: int) -> bool:
+        """Check if a specific batsman has been dismissed."""
+        return self._state.is_dismissed(batsman_id)
+
+    def get_batsman_score(self, batsman_id: int) -> int:
+        """Get the current runs scored by a specific batsman."""
+        return self._state.get_batsman_score(batsman_id)
+
+    def get_batsman_balls(self, batsman_id: int) -> int:
+        """Get the number of balls faced by a specific batsman."""
+        return self._state.get_batsman_balls(batsman_id)
+
+    def __repr__(self) -> str:
+        return (
+            f"BattingStateView(striker={self.striker}, non_striker={self.non_striker}, "
+            f"runs={self.total_runs}, wickets={self.wickets})"
+        )
+

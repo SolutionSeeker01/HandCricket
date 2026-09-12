@@ -150,3 +150,56 @@ def test_ball_result_immutability():
     result = resolve_ball(4, 2)
     with pytest.raises(FrozenInstanceError):
         result.runs = 6  # type: ignore
+
+
+# ---------------------------------------------------------------------------
+# 5. Invariant Enforcement on Direct Construction (M2)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bat,bowl,runs,is_wicket",
+    [
+        (3, 5, 0, False),   # unequal choices must award runs equal to bat (3)
+        (6, 1, 7, False),   # runs cannot exceed batsman choice
+        (4, 2, 2, False),   # runs must be batsman choice, not bowler choice
+        (4, 2, 4, True),    # unequal choices cannot be a wicket
+        (5, 5, 5, True),    # equal choices must have 0 runs
+        (5, 5, 0, False),   # equal choices must be a wicket
+        (3, 3, 1, True),    # wicket cannot award runs
+    ],
+)
+def test_ball_result_rejects_inconsistent_outcomes(bat, bowl, runs, is_wicket):
+    """Direct construction with inconsistent choices/runs/wicket must raise InvalidBallChoiceError."""
+    with pytest.raises(InvalidBallChoiceError, match="Inconsistent BallResult"):
+        BallResult(batsman_choice=bat, bowler_choice=bowl, runs=runs, is_wicket=is_wicket)
+
+
+@pytest.mark.parametrize(
+    "bat,bowl",
+    [
+        (0, 3),
+        (7, 3),
+        (3, -1),
+        (3, 8),
+        (True, 3),
+        (3, False),
+    ],
+)
+def test_ball_result_rejects_invalid_choices(bat, bowl):
+    """Direct construction with out-of-bounds or non-integer choices must raise InvalidBallChoiceError."""
+    with pytest.raises(InvalidBallChoiceError):
+        BallResult(batsman_choice=bat, bowler_choice=bowl, runs=bat if bat != bowl else 0, is_wicket=(bat == bowl))
+
+
+def test_ball_result_rejects_invalid_attribute_types():
+    """Invalid types for runs or is_wicket must raise InvalidBallChoiceError."""
+    with pytest.raises(InvalidBallChoiceError, match="runs must be an integer"):
+        BallResult(batsman_choice=4, bowler_choice=2, runs=True, is_wicket=False)  # type: ignore
+
+    with pytest.raises(InvalidBallChoiceError, match="runs must be an integer"):
+        BallResult(batsman_choice=4, bowler_choice=2, runs=4.0, is_wicket=False)  # type: ignore
+
+    with pytest.raises(InvalidBallChoiceError, match="is_wicket must be a boolean"):
+        BallResult(batsman_choice=4, bowler_choice=2, runs=4, is_wicket=0)  # type: ignore
+

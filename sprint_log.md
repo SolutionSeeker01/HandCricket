@@ -215,5 +215,36 @@
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
 
+### Post-Slice 4 Audit & Invariant Hardening
+
+* **Status**: COMPLETED
+* **Timestamp**: 2026-09-12T23:18:00+05:30
+* **What was implemented**:
+  * **H1 (High)**: Closed mutable escape hatch by introducing `BattingStateView` in `backend/app/engine/batting.py`. `Innings.batting_state` now returns `BattingStateView` exposing read-only query properties without `record_ball()`, ensuring all state mutations flow exclusively through `Innings.record_ball()`.
+  * **M1 (Medium)**: Eliminated constructor ambiguity in `Innings.__init__()` by enforcing mutual exclusivity: passing both `team_size` and a custom `batting_state` raises `InningsError`.
+  * **M2 (Medium)**: Added `__post_init__` domain validation to frozen `BallResult` enforcing strict invariants: matching choices must be a wicket with 0 runs; unequal choices must be non-wicket with runs equal to batsman choice. Rejects invalid choices and types.
+  * **M3 (Medium)**: Added full standard 11-player lineup all-out integration test (`test_full_eleven_player_all_out_innings`) verifying 10 wickets exhaustion, stranded batsman, and termination.
+  * **M4 (Medium)**: Extended batsman dismissal lifecycle test (`test_wicket_dismisses_striker_and_brings_next_batsman`) to verify that newly entering batsman's score and balls faced start at zero.
+  * **L1 (Low)**: Documented distinction between `Innings.total_balls` (authoritative match-level ball count) and `BattingState.balls_processed` (batting-domain bookkeeping).
+  * **L2 (Low)**: Refactored test helpers in `test_innings_engine.py` (`make_run_ball`, `make_wicket_ball`) to route through canonical `resolve_ball()` factory.
+  * **L3 (Low)**: Added integration test (`test_odd_run_on_ball_six_over_completion_preserves_swap`) verifying odd-run strike swap on ball 6, over advance, and preservation of strike position across over boundary.
+* **Files Modified**:
+  * `backend/app/engine/ball.py`
+  * `backend/app/engine/batting.py`
+  * `backend/app/engine/innings.py`
+  * `backend/tests/test_ball_engine.py`
+  * `backend/tests/test_batting_engine.py`
+  * `backend/tests/test_innings_engine.py`
+  * `sprint_log.md`
+* **Tests Executed**:
+  * Command: `pytest -v` from repository root $\rightarrow$ PASS (146 passed in 2.45s).
+* **Decisions Made**:
+  * Created `BattingStateView` rather than deep-copying or altering internal state storage.
+  * Enforced invariants directly inside `BallResult.__post_init__` without external dependencies.
+  * Strictly adhered to Slices 1–4 scope; zero Slice 5 features introduced.
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
+
 
 

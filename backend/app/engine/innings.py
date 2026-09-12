@@ -11,7 +11,11 @@ consequences to it.
 from typing import Optional
 
 from backend.app.engine.ball import BallResult
-from backend.app.engine.batting import DEFAULT_TEAM_SIZE, BattingState
+from backend.app.engine.batting import (
+    DEFAULT_TEAM_SIZE,
+    BattingState,
+    BattingStateView,
+)
 
 DEFAULT_MAX_OVERS: int = 5
 DEFAULT_BALLS_PER_OVER: int = 6
@@ -41,12 +45,12 @@ class Innings:
         is_completed: Alias for innings_complete.
         over_complete: True if the most recently recorded ball completed an over.
         is_over_complete: Alias for over_complete.
-        batting_state: The underlying BattingState tracking scores and wickets.
+        batting_state: Read-only BattingStateView for inspecting scores and wickets.
     """
 
     def __init__(
         self,
-        team_size: int = DEFAULT_TEAM_SIZE,
+        team_size: Optional[int] = None,
         max_overs: int = DEFAULT_MAX_OVERS,
         balls_per_over: int = DEFAULT_BALLS_PER_OVER,
         batting_state: Optional[BattingState] = None,
@@ -61,6 +65,11 @@ class Innings:
                 f"Invalid balls_per_over {balls_per_over!r}: balls_per_over must be an integer >= 1."
             )
 
+        if team_size is not None and batting_state is not None:
+            raise InningsError(
+                "Cannot specify both team_size and batting_state. Provide either team_size or an existing batting_state."
+            )
+
         if batting_state is not None:
             if not isinstance(batting_state, BattingState):
                 raise TypeError(
@@ -68,7 +77,10 @@ class Innings:
                 )
             self._batting_state: BattingState = batting_state
         else:
-            self._batting_state = BattingState(team_size=team_size)
+            resolved_team_size = team_size if team_size is not None else DEFAULT_TEAM_SIZE
+            self._batting_state = BattingState(team_size=resolved_team_size)
+
+        self._view: BattingStateView = self._batting_state.as_view()
 
         self._max_overs: int = max_overs
         self._balls_per_over: int = balls_per_over
@@ -91,7 +103,11 @@ class Innings:
 
     @property
     def total_balls(self) -> int:
-        """Total legal balls completed in the innings."""
+        """Total legal balls completed in the innings.
+
+        This counter is the authoritative innings-level ball count governing over
+        progression and innings completion limits.
+        """
         return self._total_balls
 
     @property
@@ -137,9 +153,12 @@ class Innings:
         return self.over_complete
 
     @property
-    def batting_state(self) -> BattingState:
-        """The underlying BattingState instance."""
-        return self._batting_state
+    def batting_state(self) -> BattingStateView:
+        """Read-only query view of the underlying BattingState.
+
+        To mutate batting state, balls must be recorded through Innings.record_ball().
+        """
+        return self._view
 
     # Convenience delegating properties to BattingState
     @property

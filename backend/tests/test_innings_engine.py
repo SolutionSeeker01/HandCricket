@@ -3,7 +3,7 @@
 import pytest
 
 from backend.app.engine.ball import BallResult, resolve_ball
-from backend.app.engine.batting import BattingState
+from backend.app.engine.batting import BattingState, BattingStateView
 from backend.app.engine.innings import (
     DEFAULT_BALLS_PER_OVER,
     DEFAULT_MAX_OVERS,
@@ -19,13 +19,13 @@ from backend.app.engine.innings import (
 
 
 def make_run_ball(runs: int) -> BallResult:
-    """Helper to produce a non-wicket BallResult for scoring runs."""
-    return BallResult(batsman_choice=runs, bowler_choice=(runs % 6) + 1, runs=runs, is_wicket=False)
+    """Helper to produce a non-wicket BallResult for scoring runs via resolve_ball."""
+    return resolve_ball(batsman_choice=runs, bowler_choice=(runs % 6) + 1)
 
 
 def make_wicket_ball() -> BallResult:
-    """Helper to produce a wicket BallResult."""
-    return BallResult(batsman_choice=3, bowler_choice=3, runs=0, is_wicket=True)
+    """Helper to produce a wicket BallResult via resolve_ball."""
+    return resolve_ball(batsman_choice=3, bowler_choice=3)
 
 
 # ---------------------------------------------------------------------------
@@ -56,7 +56,7 @@ def test_initial_innings_state():
     assert innings.non_striker == 2
     assert innings.total_runs == 0
     assert innings.wickets == 0
-    assert isinstance(innings.batting_state, BattingState)
+    assert isinstance(innings.batting_state, BattingStateView)
 
 
 # ---------------------------------------------------------------------------
@@ -535,7 +535,8 @@ def test_custom_batting_state_injection():
     """Innings accepts a custom pre-instantiated BattingState."""
     custom_state = BattingState(team_size=5)
     innings = Innings(batting_state=custom_state)
-    assert innings.batting_state is custom_state
+    assert isinstance(innings.batting_state, BattingStateView)
+    assert innings.batting_state.team_size == 5
     assert innings.striker == 1
 
 
@@ -596,4 +597,112 @@ def test_over_complete_semantics_clarification():
     # Now over_complete returns False again because ball 7 was not an over-ending ball.
     assert innings.over_complete is False
     assert innings.is_over_complete is False
+
+
+# ---------------------------------------------------------------------------
+# 14. Audit Hardening & Invariant Regressions (H1, M1, M3, L3)
+# ---------------------------------------------------------------------------
+
+
+def test_cannot_bypass_innings_progression_via_batting_state():
+    """Regression test (H1): Callers cannot bypass Innings progression through public API.
+
+    Innings.batting_state returns a read-only BattingStateView that lacks a record_ball method.
+    """
+    innings = Innings()
+    view = innings.batting_state
+
+    # View must NOT expose record_ball
+    assert not hasattr(view, "record_ball")
+    with pytest.raises(AttributeError):
+        view.record_ball(resolve_ball(4, 2))  # type: ignore
+
+    # Innings state remains untouched
+    assert innings.total_balls == 0
+    assert innings.balls_in_current_over == 0
+    assert innings.total_runs == 0
+
+
+def test_rejects_both_team_size_and_batting_state():
+    """Regression test (M1): Supplying both team_size and batting_state must raise InningsError."""
+    custom_state = BattingState(team_size=5)
+    with pytest.raises(InningsError, match="Cannot specify both team_size and batting_state"):
+        Innings(team_size=5, batting_state=custom_state)
+
+    with pytest.raises(InningsError, match="Cannot specify both team_size and batting_state"):
+        Innings(team_size=11, batting_state=custom_state)
+
+
+def test_full_eleven_player_all_out_innings():
+    """Integration test (M3): Standard 11-player lineup bowled through 10 wickets to all-out."""
+    innings = Innings()  # default team_size = 11
+
+    # Bowl 10 consecutive wickets
+    for expected_wicket in range(1, 11):
+        assert innings.innings_complete is False
+        assert innings.wickets == expected_wicket - 1
+        innings.record_ball(make_wicket_ball())
+        assert innings.wickets == expected_wicket
+        assert innings.total_balls == expected_wicket
+
+    # At 10 wickets with 11 players, no active striker remains
+    assert innings.wickets == 10
+    assert innings.striker is None
+    assert innings.non_striker == 2  # Batsman 2 remains stranded not out
+    assert innings.innings_complete is True
+    assert innings.is_completed is True
+    assert innings.total_balls == 10
+    assert innings.balls_in_current_over == 4  # Over 2, ball 4
+    assert innings.current_over == 2
+
+    # Attempting an 11th ball must be rejected with InningsCompleteError
+    with pytest.raises(InningsCompleteError, match="innings is already complete"):
+        innings.record_ball(make_run_ball(1))
+
+    # Invariants unchanged
+    assert innings.total_balls == 10
+    assert innings.wickets == 10
+    assert innings.batting_state.balls_processed == 10
+
+
+def test_odd_run_on_ball_six_over_completion_preserves_swap():
+    """Integration test (L3): Odd run on ball 6 swaps strike, completes over, and preserves swap."""
+    innings = Innings()
+
+    # Balls 1 to 5: even runs (2 runs each) -> Batsman 1 stays on strike
+    for _ in range(5):
+        innings.record_ball(make_run_ball(2))
+
+    assert innings.current_over == 1
+    assert innings.balls_in_current_over == 5
+    assert innings.striker == 1
+    assert innings.non_striker == 2
+
+    # Ball 6: 1 run (ODD RUN) -> batsman 1 scores 1 and ends are swapped!
+    innings.record_ball(make_run_ball(1))
+
+    # Over completes
+    assert innings.total_balls == 6
+    assert innings.balls_in_current_over == 0
+    assert innings.current_over == 2
+    assert innings.over_complete is True
+    assert innings.innings_complete is False
+
+    # Striker should be batsman 2 (due to odd run), non-striker batsman 1
+    # Crucially: no extra strike swap occurred merely because the over completed!
+    assert innings.striker == 2
+    assert innings.non_striker == 1
+    assert innings.batting_state.get_batsman_score(1) == 11  # 5*2 + 1
+    assert innings.batting_state.get_batsman_score(2) == 0
+
+    # Ball 7 (Ball 1 of Over 2): Batsman 2 faces and scores 4 runs (even)
+    innings.record_ball(make_run_ball(4))
+    assert innings.total_balls == 7
+    assert innings.balls_in_current_over == 1
+    assert innings.current_over == 2
+    assert innings.striker == 2
+    assert innings.non_striker == 1
+    assert innings.batting_state.get_batsman_score(2) == 4
+    assert innings.total_runs == 15
+
 

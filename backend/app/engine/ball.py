@@ -15,22 +15,6 @@ class InvalidBallChoiceError(ValueError):
     pass
 
 
-@dataclass(frozen=True)
-class BallResult:
-    """Immutable representation of the outcome of a single ball.
-
-    Attributes:
-        batsman_choice: The integer chosen by the batsman (1-6).
-        bowler_choice: The integer chosen by the bowler (1-6).
-        runs: Number of runs scored on this ball (0 if wicket).
-        is_wicket: True if the batsman was dismissed, False otherwise.
-    """
-    batsman_choice: int
-    bowler_choice: int
-    runs: int
-    is_wicket: bool
-
-
 def validate_choice(choice: int, role: str = "player") -> int:
     """Validate that a choice is strictly an integer between 1 and 6.
 
@@ -56,6 +40,58 @@ def validate_choice(choice: int, role: str = "player") -> int:
         )
 
     return choice
+
+
+@dataclass(frozen=True)
+class BallResult:
+    """Immutable representation of the outcome of a single ball.
+
+    Invariants:
+        - batsman_choice and bowler_choice must be integers in [1, 6].
+        - If batsman_choice == bowler_choice:
+            is_wicket must be True, runs must be 0.
+        - If batsman_choice != bowler_choice:
+            is_wicket must be False, runs must equal batsman_choice.
+
+    Attributes:
+        batsman_choice: The integer chosen by the batsman (1-6).
+        bowler_choice: The integer chosen by the bowler (1-6).
+        runs: Number of runs scored on this ball (0 if wicket).
+        is_wicket: True if the batsman was dismissed, False otherwise.
+    """
+    batsman_choice: int
+    bowler_choice: int
+    runs: int
+    is_wicket: bool
+
+    def __post_init__(self) -> None:
+        """Enforce domain invariants upon construction."""
+        validate_choice(self.batsman_choice, "batsman")
+        validate_choice(self.bowler_choice, "bowler")
+
+        if isinstance(self.runs, bool) or not isinstance(self.runs, int):
+            raise InvalidBallChoiceError(
+                f"Invalid runs {self.runs!r}: runs must be an integer, got {type(self.runs).__name__}."
+            )
+
+        if not isinstance(self.is_wicket, bool):
+            raise InvalidBallChoiceError(
+                f"Invalid is_wicket {self.is_wicket!r}: is_wicket must be a boolean, got {type(self.is_wicket).__name__}."
+            )
+
+        if self.batsman_choice == self.bowler_choice:
+            if not self.is_wicket or self.runs != 0:
+                raise InvalidBallChoiceError(
+                    f"Inconsistent BallResult: identical choices ({self.batsman_choice} vs {self.bowler_choice}) "
+                    f"must produce a wicket (is_wicket=True, runs=0), got is_wicket={self.is_wicket}, runs={self.runs}."
+                )
+        else:
+            if self.is_wicket or self.runs != self.batsman_choice:
+                raise InvalidBallChoiceError(
+                    f"Inconsistent BallResult: unequal choices ({self.batsman_choice} vs {self.bowler_choice}) "
+                    f"must produce runs equal to batsman choice with is_wicket=False "
+                    f"(is_wicket=False, runs={self.batsman_choice}), got is_wicket={self.is_wicket}, runs={self.runs}."
+                )
 
 
 def resolve_ball(batsman_choice: int, bowler_choice: int) -> BallResult:
