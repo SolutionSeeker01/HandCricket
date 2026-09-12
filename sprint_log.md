@@ -27,8 +27,8 @@
 | Slice | Title | Description | Status |
 | :--- | :--- | :--- | :--- |
 | **Slice 1** | Project Skeleton & Baseline Test Harness | Directory layout (`backend/`, `frontend/`, `deploy/`), exact pinned dependencies, `pytest` setup, verified frontend build | **APPROVED** |
-| **Slice 2** | Single Ball Resolution Engine | Pure function `resolve_ball(bat, bowl) -> BallResult` (1–6 matching rules) | **COMPLETED (Awaiting Review)** |
-| **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | NOT STARTED |
+| **Slice 2** | Single Ball Resolution Engine | Pure function `resolve_ball(bat, bowl) -> BallResult` (1–6 matching rules) | **APPROVED** |
+| **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | **COMPLETED (Awaiting Review)** |
 | **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | NOT STARTED |
 | **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | NOT STARTED |
 | **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | NOT STARTED |
@@ -124,4 +124,49 @@
   * Explicitly rejected `bool` types before integer checks because `isinstance(True, int)` evaluates to `True` in Python.
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+### Slice 3: Batsman Lifecycle & Score Tracking
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-12T22:52:00+05:30
+* **What was implemented**:
+  * Pure domain model `BattingState` in `backend/app/engine/batting.py`.
+  * Initial innings state initialized with batsman 1 on strike, batsman 2 as non-striker, next batsman as 3, 0 runs, 0 wickets, and 0 balls processed.
+  * Score accumulation logic in `record_ball(ball_result: BallResult)`:
+    * Runs scored added to current striker's individual score and team total.
+    * Odd runs (1, 3, 5): striker and non-striker swap ends.
+    * Even runs (2, 4, 6): striker and non-striker remain in place.
+  * Wicket lifecycle:
+    * Striker dismissed and appended to `dismissed_batsmen`.
+    * Wickets tally incremented.
+    * Next available batsman enters as the new active striker; non-striker remains in place.
+  * Robust lifecycle protection and domain exceptions:
+    * `BattingLifecycleError`: Base domain exception.
+    * `NoAvailableBatsmanError`: Raised when processing a ball when no striker is available.
+    * `InvalidBatsmanError`: Raised on invalid batsman identifiers or roster bounds.
+  * Defensive immutability:
+    * Property accessors return copies of `individual_scores`, `balls_faced`, and `dismissed_batsmen` to prevent external mutation.
+  * Created unit test suite in `backend/tests/test_batting_engine.py` (32 tests) covering:
+    * Initial state verification.
+    * Scoring updates for 1, 2, 4, 6 runs.
+    * Odd-run swapping for 1, 3, 5 runs.
+    * Even-run retention for 2, 4, 6 runs.
+    * Wicket dismissal, next batsman entry, and consecutive wickets.
+    * Realistic multi-ball sequential match progression.
+    * Roster exhaustion boundary and `NoAvailableBatsmanError`.
+    * Invalid operations (invalid IDs, invalid team sizes, invalid ball types).
+    * Immutability and state isolation.
+* **Files Created**:
+  * `backend/app/engine/batting.py`
+  * `backend/tests/test_batting_engine.py`
+* **Tests Executed**:
+  * Command: `pytest -v` from repository root $\rightarrow$ PASS (90 passed in 1.42s). All 3 Slice 1 sanity tests + 55 Slice 2 ball tests + 32 Slice 3 batting tests passed cleanly.
+* **Decisions Made**:
+  * Modeled `BattingState` as an encapsulated domain entity tracking individual runs and balls faced per batsman.
+  * Ensured single authoritative wicket mutation pathway strictly via `record_ball(ball_result)`. Removed arbitrary dismissal API.
+  * Decoupled batting progression from over limits, innings termination, and match rules (kept strictly for Slices 4 and 6).
+  * Maintained defensive copies on all dictionary and list property getters.
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
