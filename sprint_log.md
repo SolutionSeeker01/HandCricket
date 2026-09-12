@@ -26,8 +26,8 @@
 
 | Slice | Title | Description | Status |
 | :--- | :--- | :--- | :--- |
-| **Slice 1** | Project Skeleton & Baseline Test Harness | Directory layout (`backend/`, `frontend/`, `deploy/`), exact pinned dependencies, `pytest` setup, verified frontend build | **COMPLETED (Awaiting Review)** |
-| **Slice 2** | Single Ball Resolution Engine | Pure function `resolve_ball(bat, bowl) -> BallResult` (1–6 matching rules) | NOT STARTED |
+| **Slice 1** | Project Skeleton & Baseline Test Harness | Directory layout (`backend/`, `frontend/`, `deploy/`), exact pinned dependencies, `pytest` setup, verified frontend build | **APPROVED** |
+| **Slice 2** | Single Ball Resolution Engine | Pure function `resolve_ball(bat, bowl) -> BallResult` (1–6 matching rules) | **COMPLETED (Awaiting Review)** |
 | **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | NOT STARTED |
 | **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | NOT STARTED |
 | **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | NOT STARTED |
@@ -92,3 +92,36 @@
   * Added `tailwind.config.js` and `postcss.config.js` to ensure the frontend build pipeline functions without error.
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+### Slice 2: Single Ball Resolution Engine
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-12T22:47:00+05:30
+* **What was implemented**:
+  * Pure deterministic game engine module in `backend/app/engine/ball.py`.
+  * Implemented `BallResult` frozen dataclass with `batsman_choice`, `bowler_choice`, `runs`, and `is_wicket`.
+  * Implemented `validate_choice()` enforcing integer values between 1 and 6, explicitly rejecting booleans and non-integers.
+  * Implemented `InvalidBallChoiceError(ValueError)` domain exception for invalid inputs.
+  * Implemented `resolve_ball(batsman_choice, bowler_choice)` adhering strictly to frozen Hand Cricket ball resolution rules:
+    * `batsman_choice == bowler_choice` $\rightarrow$ Wicket (`runs=0`, `is_wicket=True`).
+    * `batsman_choice != bowler_choice` $\rightarrow$ Runs (`runs=batsman_choice`, `is_wicket=False`).
+  * Created unit test suite in `backend/tests/test_ball_engine.py` covering:
+    * All 36 combinations (6x6 matrix of 1..6 vs 1..6).
+    * Canonical runs and wickets examples from product specification.
+    * Out-of-bounds inputs (<1, >6).
+    * Non-integer type rejection (strings, floats, None, bools, lists, dicts).
+    * Player role identification in error messages.
+    * Determinism and object immutability.
+* **Files Created**:
+  * `backend/app/engine/__init__.py`
+  * `backend/app/engine/ball.py`
+  * `backend/tests/test_ball_engine.py`
+* **Tests Executed**:
+  * Command: `pytest -v` from repository root $\rightarrow$ PASS (58 passed in 1.37s). All 3 previous Slice 1 sanity tests + 55 Slice 2 engine tests passed cleanly.
+* **Decisions Made**:
+  * Defined `BallResult` as an immutable frozen dataclass (`@dataclass(frozen=True)`) to ensure ball resolution results are safe, read-only value objects.
+  * Subclassed `ValueError` for `InvalidBallChoiceError` to provide clear domain context while maintaining idiomatic Python error hierarchy.
+  * Explicitly rejected `bool` types before integer checks because `isinstance(True, int)` evaluates to `True` in Python.
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
