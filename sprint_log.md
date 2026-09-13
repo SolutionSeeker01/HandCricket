@@ -34,7 +34,7 @@
 | **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | **APPROVED** |
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | **COMPLETED (Awaiting Review)** |
 | **Slice 8** | Headless Computer Player (Bot) | Minimal headless ComputerPlayer generating legal 1–6 ball choices with injectable randomness | COMPLETED (Awaiting Review) |
-| **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI app, `/health`, room generation (`POST /api/rooms`), WebSocket connection | NOT STARTED |
+| **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI HTTP /health and basic WebSocket /ws transport smoke test | COMPLETED (Awaiting Review) |
 | **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5-second countdown timer, auto-pick fallback | NOT STARTED |
 | **Slice 11** | EC2 Deployment of Walking Skeleton | Launch EC2 `t3.small`, Docker + Caddy SSL, verify public `wss://` on phone | NOT STARTED |
 | **Slice 12** | Minimal Playable Arena UI | Vite + React + Tailwind minimal arena (Scoreboard, Keypad, Bot Mode) | NOT STARTED |
@@ -466,6 +466,56 @@
   * Turn timers, WebSockets, HTTP endpoints, and UI integration (Slices 9–15).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+---
+
+### Slice 9: Backend HTTP & WebSocket Foundation
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-13T12:12:00+05:30
+* **Goal**: Establish the transport boundary (FastAPI HTTP + WebSocket connection foundation) with clear separation from the pure domain engine, serving as a transport smoke test without coupling to game protocol or state.
+* **Implementation Details**:
+  * Preserved `GET /health` on FastAPI application in `backend/app/main.py` returning `{"status": "ok", "app": "hand-cricket"}`.
+  * Created transport package `backend/app/transport/`:
+    * `__init__.py`: Package entrypoint.
+    * `websocket.py`: `websocket_smoke_test(websocket: WebSocket)` handler.
+  * Mounted WebSocket endpoint `@app.websocket("/ws")` in `backend/app/main.py`.
+  * Transport smoke test behavior:
+    * Accepts incoming WebSocket connection.
+    * Client sends `"ping"` $\rightarrow$ Server responds `"pong"`.
+    * Client sends unexpected text $\rightarrow$ Server returns explicit rejection `"unrecognized: {message}"`.
+    * Clean disconnection: Catches `WebSocketDisconnect` cleanly without leaking exceptions or producing unhandled tracebacks.
+  * Architectural separation:
+    * Transport layer contains zero domain logic, zero game state, zero room dictionaries, zero timers, zero CORS bloat.
+    * Zero imports from `backend.app.engine` into `backend.app.transport` or `backend.app.main`.
+  * Created test suite `backend/tests/test_websocket.py` (7 tests):
+    * `GET /health` contract verification.
+    * WebSocket connection acceptance and clean disconnect.
+    * `"ping"` $\rightarrow$ `"pong"` round-trip verification.
+    * Multiple sequential ping/pong interactions.
+    * Explicit handling of unrecognized text.
+    * Explicit client close without server exception.
+    * Module inspection proving zero domain engine imports in transport code.
+* **Files Added / Modified**:
+  * `backend/app/main.py` (Modified — mounted `/ws`)
+  * `backend/app/transport/__init__.py` (New)
+  * `backend/app/transport/websocket.py` (New)
+  * `backend/tests/test_websocket.py` (New — 7 tests)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Command: `python -m pytest backend/tests/ -v --tb=short` from repository root $\rightarrow$ PASS (386 passed in 2.14s).
+  * 3 sanity + 71 ball + 33 batting + 39 innings + 49 bowling + 48 match + 37 teams + 32 toss + 31 match setup + 36 computer + 7 websocket = 386 tests total.
+* **Decisions Made**:
+  * Isolated WebSocket transport handler in `backend/app/transport/websocket.py` to keep `main.py` clean while maintaining an explicit transport/domain boundary.
+  * Avoided unnecessary enterprise abstractions (no APIRouters, no connection managers, no DI frameworks).
+  * Omitted CORS middleware as it is not needed to prove backend foundation.
+* **Explicitly Deferred Work**:
+  * WebSocket game protocol, room codes, room managers, and 5-second turn timers (Slice 10).
+  * Production EC2 deployment with Docker and Caddy (Slice 11).
+  * Minimal Playable Arena UI (Slice 12).
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
 
