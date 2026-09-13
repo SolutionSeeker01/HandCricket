@@ -31,8 +31,8 @@
 | **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | **APPROVED** |
 | **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | **COMPLETED (Awaiting Review)** |
 | **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | **COMPLETED (Awaiting Review)** |
-| **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | **COMPLETED (Awaiting Review)** |
-| **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | NOT STARTED |
+| **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | **APPROVED** |
+| **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | **COMPLETED (Awaiting Review)** |
 | **Slice 8** | Headless Computer Player (Bot) | Bot choosing 1–6 and picking bowlers; 100-match automated Bot vs Bot simulation | NOT STARTED |
 | **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI app, `/health`, room generation (`POST /api/rooms`), WebSocket connection | NOT STARTED |
 | **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5-second countdown timer, auto-pick fallback | NOT STARTED |
@@ -368,11 +368,61 @@
   * Preserved `completed_overs` as reflecting only fully completed overs (partial overs are not counted).
   * Kept `BowlingStateView` strictly read-only by omitting `end_innings()`.
 * **Explicitly Deferred Work**:
-  * Predefined teams / toss mechanics (Slice 7).
   * Computer player / bot decision making (Slice 8).
   * Turn timers, WebSockets, and UI integration (Slices 9–15).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+---
+
+### Slice 7: Predefined Teams & Toss Mechanics
+
+* **Goal**: Implement pure domain models and logic for 4 predefined teams (11 players each), Participant A/B team assignment (permitting same team), coin toss resolution with dependency-injected randomness, and deterministic first-innings side derivation.
+* **Implementation Details**:
+  * Created `backend/app/engine/teams.py`:
+    * Frozen dataclasses `Player(id: int, name: str)` and `Team(id: str, name: str, players: tuple[Player, ...])`.
+    * Defined 4 immutable, deterministic teams (11 players each): India (`IND`), Australia (`AUS`), England (`ENG`), and South Africa (`SA`).
+    * Implemented lookup functions `get_teams() -> list[Team]`, `get_team(team_id: str) -> Team` (case-insensitive with whitespace stripping), and `is_valid_team_id(team_id: Any) -> bool`.
+    * Validation invariants: exactly 11 players per team, unique 1..11 player IDs, frozen dataclass immutability preventing in-place corruption.
+  * Created `backend/app/engine/toss.py`:
+    * Enums: `Participant` (`A`, `B`) with `other()` method; `TossDecision` (`BAT`, `BOWL`); `TossStatus` (`NOT_STARTED`, `AWAITING_DECISION`, `COMPLETED`).
+    * Frozen dataclass `TossResult(winner, decision, batting_first, bowling_first, first_bowler_selector)`.
+    * Pure derivation function `derive_first_innings(winner, decision)`.
+    * Stateful coordinator `Toss` with pluggable `TossChooser` callable for 100% deterministic testability (defaulting to standard Python `random.choice`).
+    * Lifecycle enforcement: cannot choose before flip, only winner can choose, cannot flip or choose twice.
+  * Created `backend/app/engine/pre_match.py`:
+    * `PreMatchSetup` class coordinating participant team selection and toss.
+    * Allows Participant A and B to select any valid team (including both choosing the same team).
+    * Provides first-innings properties: `batting_first_team`, `bowling_first_team`, `first_bowler_selector_team`.
+    * Convenience integration method `create_match(**kwargs) -> Match` that instantiates a configured Slice 6 `Match`, preserving exact predefined team names.
+* **Hardening (Manual Review Findings Fixed)**:
+  * Finding 1 (Mutable Toss Escape): Removed public mutable `toss` property from `PreMatchSetup`. All query state is exposed via dedicated properties (`toss_status`, `toss_winner`, `toss_result`, etc.). Added regression test.
+  * Finding 2 (Team Selection Lock): Enforced lifecycle rule in `PreMatchSetup.select_team()`: teams can only be selected/changed while toss is `NOT_STARTED`. Once flipped (`AWAITING_DECISION`) or completed (`COMPLETED`), `select_team()` raises `PreMatchError`. Added tests.
+  * Finding 3 (Same-Team Name Preservation): Removed presentation-oriented `(A)` / `(B)` suffixes from `create_match()`. Match engine accepts identical team names (`India` vs `India`) directly.
+  * Finding 4 (Unnecessary Alias Module): Deleted `backend/app/engine/match_setup.py` and its alias-import test; kept `pre_match.py` as canonical.
+* **Files Added / Modified**:
+  * `backend/app/engine/teams.py` (New)
+  * `backend/app/engine/toss.py` (New)
+  * `backend/app/engine/pre_match.py` (New / Hardened)
+  * `backend/tests/test_teams_engine.py` (New — 37 tests)
+  * `backend/tests/test_toss_engine.py` (New — 32 tests)
+  * `backend/tests/test_match_setup_engine.py` (New — 31 tests)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Command: `python -m pytest backend/tests/ -v` from repository root $\rightarrow$ PASS (343 passed in 2.12s).
+  * 3 sanity + 71 ball + 33 batting + 39 innings + 49 bowling + 48 match + 37 teams + 32 toss + 31 match setup = 343 tests total (100 new tests in Slice 7).
+* **Decisions Made**:
+  * Used `frozen=True` dataclasses and immutable tuples for all team and player models to eliminate any accidental in-place mutation escape hatches.
+  * Designed random chooser as an injectable callable `TossChooser` (`Optional[Callable[[], Participant]]`) so unit tests never rely on uncontrolled randomness or global monkey-patching.
+  * Removed direct exposure of mutable `Toss` object to protect encapsulation.
+  * Locked team selection once toss starts to ensure internal state consistency between participant and team.
+  * Maintained complete decoupling between `Toss` / `Teams` and `Match`; `PreMatchSetup.create_match()` provides clean, non-invasive integration with Slice 6.
+* **Explicitly Deferred Work**:
+  * Computer player / bot decision making (Slice 8).
+  * Turn timers, WebSockets, and UI integration (Slices 9–15).
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
 
