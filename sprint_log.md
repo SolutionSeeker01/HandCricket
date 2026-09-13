@@ -33,7 +33,7 @@
 | **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | **COMPLETED (Awaiting Review)** |
 | **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | **APPROVED** |
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | **COMPLETED (Awaiting Review)** |
-| **Slice 8** | Headless Computer Player (Bot) | Bot choosing 1–6 and picking bowlers; 100-match automated Bot vs Bot simulation | NOT STARTED |
+| **Slice 8** | Headless Computer Player (Bot) | Minimal headless ComputerPlayer generating legal 1–6 ball choices with injectable randomness | COMPLETED (Awaiting Review) |
 | **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI app, `/health`, room generation (`POST /api/rooms`), WebSocket connection | NOT STARTED |
 | **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5-second countdown timer, auto-pick fallback | NOT STARTED |
 | **Slice 11** | EC2 Deployment of Walking Skeleton | Launch EC2 `t3.small`, Docker + Caddy SSL, verify public `wss://` on phone | NOT STARTED |
@@ -422,6 +422,51 @@
   * Turn timers, WebSockets, and UI integration (Slices 9–15).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+---
+
+### Slice 8: Headless Computer Player (Bot)
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-13T12:01:00+05:30
+* **Goal**: Implement a minimal, headless `ComputerPlayer` domain engine for V1 that produces a legal 1–6 ball choice for either batting or bowling turns with injectable randomness for deterministic testing.
+* **Implementation Details**:
+  * Created `backend/app/engine/computer.py`:
+    * Abstraction: `ComputerPlayer(chooser=None)` with `choose_number() -> int`.
+    * Default production behavior: `default_number_chooser()` returning `random.randint(1, 6)`.
+    * Injectable randomness: `chooser: Optional[Callable[[], int]]` passed via constructor, enabling 100% deterministic unit tests.
+    * Domain boundary & validation reuse: Delegates directly to `validate_choice(raw_choice, role="computer")` from `backend.app.engine.ball`.
+    * Guarantees strict domain invariants: raises `InvalidBallChoiceError` if chooser produces numbers outside [1, 6], booleans (`True`/`False`), or non-integer types (`str`, `float`, `None`, lists).
+    * Constructor validation: validates that `chooser` is callable if provided (raises `TypeError` otherwise).
+    * Zero coupling to mutable match/game state: no scores, wickets, overs, targets, opponents, match references, FastAPI, or WebSockets.
+  * Created `backend/tests/test_computer_engine.py` (36 tests):
+    * Deterministic injected values (1, 6, all valid choices 1..6, sequential sequences).
+    * Independent repeated calls.
+    * Default production chooser generating valid choices in [1, 6] over 100 repeated calls.
+    * Out-of-bounds rejection (0, 7, -1, -100, 8, 99).
+    * Boolean rejection (`True`, `False`).
+    * Non-integer type rejection (`str`, `None`, `float`, list, dict).
+    * Constructor argument validation (non-callable rejection).
+    * Conceptual roles: batting choice, bowling choice, and Bot vs Bot ball resolution.
+    * Instance isolation and encapsulation verification.
+    * `__repr__` formatting.
+* **Files Added / Modified**:
+  * `backend/app/engine/computer.py` (New)
+  * `backend/tests/test_computer_engine.py` (New)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Command: `python -m pytest backend/tests/ -v --tb=short` from repository root $\rightarrow$ PASS (379 passed in 2.28s).
+  * 3 sanity + 71 ball + 33 batting + 39 innings + 49 bowling + 48 match + 37 teams + 32 toss + 31 match setup + 36 computer = 379 tests total.
+* **Decisions Made**:
+  * Reused `ball.py`'s `validate_choice()` as the single authoritative source of truth for legal 1–6 choices.
+  * Used `Callable[[], int]` for `NumberChooser` to enable straightforward lambdas in tests without mocks or global monkey-patching.
+  * Kept `ComputerPlayer` stateless regarding match progression; the same instance can generate numbers for either batting or bowling.
+* **Explicitly Deferred Work**:
+  * Strategic/heuristic AI or difficulty levels (intentionally deferred per V1 roadmap).
+  * Turn timers, WebSockets, HTTP endpoints, and UI integration (Slices 9–15).
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
 
