@@ -46,13 +46,18 @@ def reset_standalone_turn_session(
 
 
 def get_standalone_computer_session(
-    user_team: str = "IND", opponent_team: str = "AUS"
+    user_team: str = "IND", opponent_team: str = "AUS", skip_pre_match: bool = False
 ) -> ComputerGameSession:
     """Retrieve or initialize the active ComputerGameSession."""
     global _standalone_computer_session
-    if _standalone_computer_session is None or _standalone_computer_session.match.is_completed:
+    if (
+        _standalone_computer_session is None
+        or (_standalone_computer_session.match is not None and _standalone_computer_session.match.is_completed)
+    ):
         _standalone_computer_session = ComputerGameSession(
-            user_team_id=user_team, opponent_team_id=opponent_team
+            user_team_id=user_team,
+            opponent_team_id=opponent_team,
+            skip_pre_match=skip_pre_match,
         )
     return _standalone_computer_session
 
@@ -181,6 +186,17 @@ async def handle_computer_game_websocket(
                 if msg_type == "submit_number":
                     msg = parse_client_message(raw_text)
                     await session.submit_number(msg["number"], turn_id=msg.get("turn_id"))
+                elif msg_type == "select_team":
+                    msg = parse_client_message(raw_text)
+                    await session.select_team(msg["team_id"])
+                elif msg_type == "choose_toss":
+                    msg = parse_client_message(raw_text)
+                    await session.choose_toss(msg["decision"])
+                elif msg_type == "select_bowler":
+                    msg = parse_client_message(raw_text)
+                    await session.select_bowler(msg["bowler_id"])
+                elif msg_type == "reset_pre_match":
+                    await session.reset_pre_match()
                 elif msg_type == "start_innings_2":
                     await session.start_next_innings()
                 elif msg_type == "new_game":

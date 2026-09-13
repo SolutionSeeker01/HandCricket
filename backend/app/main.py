@@ -26,6 +26,20 @@ def health_check() -> dict[str, str]:
     return {"status": "ok", "app": "hand-cricket"}
 
 
+@app.get("/teams")
+def get_predefined_teams() -> list:
+    """Retrieve the 4 predefined teams with complete 11-player rosters."""
+    from backend.app.engine.teams import get_teams
+    return [
+        {
+            "id": team.id,
+            "name": team.name,
+            "players": [{"id": p.id, "name": p.name} for p in team.players],
+        }
+        for team in get_teams()
+    ]
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -33,11 +47,12 @@ async def websocket_endpoint(
     mode: Optional[str] = Query(None),
     user_team: Optional[str] = Query("IND"),
     opponent_team: Optional[str] = Query("AUS"),
+    skip_pre_match: Optional[bool] = Query(False),
 ) -> None:
     """WebSocket endpoint supporting Computer Mode, protocol turns, and transport smoke testing.
 
     If query parameter 'mode=computer' is provided, connects the client to a full
-    match against the server-side ComputerPlayer (Slice 12).
+    match against the server-side ComputerPlayer (Slice 12 & 13).
     If query parameter 'participant' is provided (e.g. /ws?participant=A), connects the
     client to the standalone TurnSession under the Slice 10 WebSocket game protocol.
     If both are omitted, preserves Slice 9 transport smoke testing behavior.
@@ -46,6 +61,7 @@ async def websocket_endpoint(
         session = get_standalone_computer_session(
             user_team=user_team or "IND",
             opponent_team=opponent_team or "AUS",
+            skip_pre_match=bool(skip_pre_match),
         )
         await handle_computer_game_websocket(websocket, session)
         return

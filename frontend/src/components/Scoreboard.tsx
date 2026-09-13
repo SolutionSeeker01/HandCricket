@@ -68,9 +68,48 @@ const AustraliaFlag: React.FC = () => (
   </svg>
 );
 
+const EnglandFlag: React.FC = () => (
+  <svg viewBox="0 0 36 36" className="w-9 h-9 sm:w-11 sm:h-11 rounded-full shadow-md border-2 border-white/20 shrink-0">
+    <clipPath id="circle-clip-eng">
+      <circle cx="18" cy="18" r="18" />
+    </clipPath>
+    <g clipPath="url(#circle-clip-eng)">
+      <rect x="0" y="0" width="36" height="36" fill="#FFFFFF" />
+      {/* Red St George Cross */}
+      <rect x="15" y="0" width="6" height="36" fill="#CF142B" />
+      <rect x="0" y="15" width="36" height="6" fill="#CF142B" />
+    </g>
+  </svg>
+);
+
+const SouthAfricaFlag: React.FC = () => (
+  <svg viewBox="0 0 36 36" className="w-9 h-9 sm:w-11 sm:h-11 rounded-full shadow-md border-2 border-white/20 shrink-0">
+    <clipPath id="circle-clip-sa">
+      <circle cx="18" cy="18" r="18" />
+    </clipPath>
+    <g clipPath="url(#circle-clip-sa)">
+      {/* Top red, bottom blue */}
+      <rect x="0" y="0" width="36" height="18" fill="#E03C31" />
+      <rect x="0" y="18" width="36" height="18" fill="#001489" />
+      {/* White background for Y shape */}
+      <polygon points="0,0 16,18 0,36 6,36 22,18 6,0" fill="#FFFFFF" />
+      <rect x="16" y="14" width="20" height="8" fill="#FFFFFF" />
+      {/* Green Y-shape */}
+      <polygon points="0,2 14,18 0,34 4,34 18,18 4,2" fill="#007749" />
+      <rect x="16" y="15.5" width="20" height="5" fill="#007749" />
+      {/* Yellow/Gold chevron */}
+      <polygon points="0,5 11,18 0,31" fill="#FFB81C" />
+      {/* Black triangle */}
+      <polygon points="0,8 8,18 0,28" fill="#000000" />
+    </g>
+  </svg>
+);
+
 const TeamFlagBadge: React.FC<{ id: string; name: string }> = ({ id }) => {
   if (id === 'IND') return <IndiaFlag />;
   if (id === 'AUS') return <AustraliaFlag />;
+  if (id === 'ENG') return <EnglandFlag />;
+  if (id === 'SA') return <SouthAfricaFlag />;
   return (
     <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-blue-600 to-indigo-800 border-2 border-white/20 flex items-center justify-center font-black text-xs text-white shadow-md shrink-0">
       {id.slice(0, 3)}

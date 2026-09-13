@@ -1,14 +1,21 @@
 import { useState } from 'react';
+import { BowlerPickerModal } from './components/BowlerPickerModal';
 import { Header } from './components/Header';
 import { InningsBreakModal } from './components/InningsBreakModal';
+import { LandingScreen } from './components/LandingScreen';
 import { MatchResultModal } from './components/MatchResultModal';
 import { PitchArena } from './components/PitchArena';
 import { Scoreboard } from './components/Scoreboard';
 import { SettingsModal } from './components/SettingsModal';
+import { TeamSelectionScreen } from './components/TeamSelectionScreen';
+import { TossScreen } from './components/TossScreen';
 import { useCricketGame } from './hooks/useCricketGame';
 
 export default function App() {
   const {
+    appStage,
+    preMatchState,
+    bowlerSelectionPrompt,
     matchState,
     connectionStatus,
     selectedNumber,
@@ -16,6 +23,12 @@ export default function App() {
     eventFeedback,
     milestoneFeedback,
     errorMessage,
+    startVsComputer,
+    goToLanding,
+    selectTeam,
+    chooseToss,
+    selectBowler,
+    resetPreMatch,
     submitNumber,
     startNextInnings,
     resetGame,
@@ -24,28 +37,8 @@ export default function App() {
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
 
-  // 1. Loading / Connecting Screen
-  if (connectionStatus === 'connecting' && !matchState) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-white p-4">
-        <div className="flex items-center space-x-2 mb-4">
-          <span className="text-3xl sm:text-4xl font-black italic tracking-wider text-white">
-            Hand
-          </span>
-          <span className="text-3xl sm:text-4xl font-black italic tracking-wider text-amber-400">
-            Cricket
-          </span>
-        </div>
-        <div className="flex items-center space-x-2 text-sky-400 text-sm font-semibold animate-pulse">
-          <div className="w-3 h-3 rounded-full bg-sky-400 animate-ping" />
-          <span>Entering stadium...</span>
-        </div>
-      </div>
-    );
-  }
-
-  // 2. Connection Error Screen
-  if (connectionStatus === 'error' && !matchState) {
+  // 1. Connection Error Screen
+  if (connectionStatus === 'error' && !matchState && !preMatchState) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 text-white p-4 text-center">
         <div className="text-5xl mb-3">📡</div>
@@ -63,6 +56,57 @@ export default function App() {
     );
   }
 
+  // 2. Landing Screen
+  if (appStage === 'LANDING') {
+    return <LandingScreen onPlayVsComputer={startVsComputer} />;
+  }
+
+  // 3. Pre-Match Stage Flows
+  if (appStage === 'PRE_MATCH') {
+    const stage = preMatchState?.stage || 'TEAM_SELECTION';
+
+    if (stage === 'TOSS_DECISION' || stage === 'TOSS_RESULT') {
+      return (
+        <TossScreen
+          userTeam={preMatchState?.user_team ?? null}
+          opponentTeam={preMatchState?.opponent_team ?? null}
+          tossWinner={preMatchState?.toss_winner ?? null}
+          tossDecision={preMatchState?.toss_decision ?? null}
+          onChooseToss={chooseToss}
+          isLoading={isWaiting}
+        />
+      );
+    }
+
+    if (stage === 'BOWLER_SELECTION') {
+      return (
+        <BowlerPickerModal
+          currentOver={1}
+          maxOvers={5}
+          teamName={preMatchState?.user_team?.name || 'Your Team'}
+          eligibleBowlers={preMatchState?.eligible_bowlers || []}
+          usedBowlers={preMatchState?.used_bowlers || []}
+          onSelectBowler={selectBowler}
+          isLoading={isWaiting}
+        />
+      );
+    }
+
+    // Default to Team Selection
+    return (
+      <TeamSelectionScreen
+        availableTeams={preMatchState?.available_teams || []}
+        onSelectTeam={selectTeam}
+        onBack={() => {
+          resetPreMatch();
+          goToLanding();
+        }}
+        isLoading={isWaiting}
+      />
+    );
+  }
+
+  // 4. In-Match Playable Arena (Slice 12 Approved Interface)
   return (
     <div className="relative w-full h-[100dvh] max-h-[100dvh] flex flex-col items-center justify-between overflow-hidden bg-[url('/stadium_bg.jpg')] bg-cover bg-center bg-no-repeat text-white select-none">
       {/* Soft atmospheric overlay for readability */}
@@ -100,6 +144,19 @@ export default function App() {
         />
       )}
 
+      {/* Over-by-Over Bowler Selection Modal Overlay */}
+      {bowlerSelectionPrompt && (
+        <BowlerPickerModal
+          currentOver={bowlerSelectionPrompt.current_over}
+          maxOvers={matchState?.max_overs || 5}
+          teamName={matchState?.user_team?.name || 'Your Team'}
+          eligibleBowlers={bowlerSelectionPrompt.eligible_bowlers}
+          usedBowlers={bowlerSelectionPrompt.used_bowlers}
+          onSelectBowler={selectBowler}
+          isLoading={isWaiting}
+        />
+      )}
+
       {/* Settings & Rules Modal */}
       <SettingsModal
         isOpen={showSettings}
@@ -110,3 +167,4 @@ export default function App() {
     </div>
   );
 }
+

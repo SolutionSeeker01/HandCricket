@@ -80,3 +80,46 @@ export interface MilestoneFeedback {
   milestone: 50 | 100;
   label: 'FIFTY!' | 'CENTURY!';
 }
+
+export type AppStage = 'LANDING' | 'PRE_MATCH' | 'IN_MATCH';
+
+export type PreMatchStage =
+  | 'TEAM_SELECTION'
+  | 'TOSS_DECISION'
+  | 'TOSS_RESULT'
+  | 'BOWLER_SELECTION'
+  | 'MATCH_READY';
+
+export interface TeamRosterPlayer {
+  id: number;
+  name: string;
+}
+
+export interface TeamRoster {
+  id: string;
+  name: string;
+  players: TeamRosterPlayer[];
+}
+
+export interface PreMatchState {
+  stage: PreMatchStage;
+  available_teams: TeamRoster[];
+  user_team: TeamInfo | null;
+  opponent_team: TeamInfo | null;
+  toss_winner: 'user' | 'computer' | null;
+  toss_decision: 'BAT' | 'BOWL' | null;
+  batting_first: 'user' | 'computer' | null;
+  bowling_first: 'user' | 'computer' | null;
+  first_bowler_selector: 'user' | 'computer' | null;
+  eligible_bowlers?: TeamRosterPlayer[];
+  used_bowlers?: TeamRosterPlayer[];
+  current_over?: number;
+}
+
+export interface BowlerSelectionPrompt {
+  current_over: number;
+  eligible_bowlers: TeamRosterPlayer[];
+  used_bowlers: TeamRosterPlayer[];
+  match_state?: MatchState;
+}
+

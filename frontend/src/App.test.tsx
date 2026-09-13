@@ -5,7 +5,11 @@ import { PitchArena } from './components/PitchArena';
 import { Scoreboard } from './components/Scoreboard';
 import { InningsBreakModal } from './components/InningsBreakModal';
 import { MatchResultModal } from './components/MatchResultModal';
-import { MatchState } from './types';
+import { LandingScreen } from './components/LandingScreen';
+import { TeamSelectionScreen } from './components/TeamSelectionScreen';
+import { TossScreen } from './components/TossScreen';
+import { BowlerPickerModal } from './components/BowlerPickerModal';
+import { MatchState, TeamRoster } from './types';
 import { useCricketGame } from './hooks/useCricketGame';
 
 const mockMatchState: MatchState = {
@@ -652,3 +656,142 @@ describe('useCricketGame milestone detection', () => {
     expect(result.current.milestoneFeedback).toBeNull();
   });
 });
+
+describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
+  it('LandingScreen renders Play vs Computer and disabled Play with Friend with COMING SOON badge', () => {
+    const handlePlay = vi.fn();
+    render(<LandingScreen onPlayVsComputer={handlePlay} />);
+
+    expect(screen.getByText('HAND CRICKET')).toBeDefined();
+    expect(screen.getByText('Play vs Computer')).toBeDefined();
+    expect(screen.getByText('Play with Friend')).toBeDefined();
+    expect(screen.getByText('COMING SOON')).toBeDefined();
+
+    const playBtn = screen.getByText('PLAY NOW');
+    fireEvent.click(playBtn);
+    expect(handlePlay).toHaveBeenCalledTimes(1);
+  });
+
+  it('TeamSelectionScreen renders all 4 teams and handles team selection and back navigation', () => {
+    const handleSelect = vi.fn();
+    const handleBack = vi.fn();
+    const mockTeams: TeamRoster[] = [
+      { id: 'IND', name: 'India', players: [{ id: 1, name: 'Rohit Sharma' }] },
+      { id: 'AUS', name: 'Australia', players: [{ id: 1, name: 'David Warner' }] },
+      { id: 'ENG', name: 'England', players: [{ id: 1, name: 'Jos Buttler' }] },
+      { id: 'SA', name: 'South Africa', players: [{ id: 1, name: 'Temba Bavuma' }] },
+    ];
+
+    render(
+      <TeamSelectionScreen
+        availableTeams={mockTeams}
+        onSelectTeam={handleSelect}
+        onBack={handleBack}
+      />
+    );
+
+    expect(screen.getByText('CHOOSE YOUR TEAM')).toBeDefined();
+    expect(screen.getAllByText('India').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Australia').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('England').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('South Africa').length).toBeGreaterThan(0);
+
+    // Select Australia
+    fireEvent.click(screen.getAllByText('Australia')[0]);
+
+    // Click Proceed
+    const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+    fireEvent.click(proceedBtn);
+    expect(handleSelect).toHaveBeenCalledWith('AUS');
+
+    // Click Back
+    const backBtn = screen.getByText(/← BACK/i);
+    fireEvent.click(backBtn);
+    expect(handleBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('TossScreen displays user toss win with BAT and BOWL buttons', () => {
+    const handleChoice = vi.fn();
+    render(
+      <TossScreen
+        userTeam={{ id: 'IND', name: 'India' }}
+        opponentTeam={{ id: 'AUS', name: 'Australia' }}
+        tossWinner="user"
+        tossDecision={null}
+        onChooseToss={handleChoice}
+      />
+    );
+
+    expect(screen.getByText('YOU WON THE TOSS!')).toBeDefined();
+    expect(screen.getByText('BAT FIRST')).toBeDefined();
+    expect(screen.getByText('BOWL FIRST')).toBeDefined();
+
+    fireEvent.click(screen.getByText('BAT FIRST'));
+    expect(handleChoice).toHaveBeenCalledWith('BAT');
+
+    fireEvent.click(screen.getByText('BOWL FIRST'));
+    expect(handleChoice).toHaveBeenCalledWith('BOWL');
+  });
+
+  it('TossScreen displays computer toss win and its decision', () => {
+    render(
+      <TossScreen
+        userTeam={{ id: 'IND', name: 'India' }}
+        opponentTeam={{ id: 'AUS', name: 'Australia' }}
+        tossWinner="computer"
+        tossDecision="BAT"
+        onChooseToss={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('COMPUTER WON THE TOSS')).toBeDefined();
+    expect(screen.getByText(/BAT FIRST/i)).toBeDefined();
+  });
+
+  it('BowlerPickerModal displays quota, eligible players, and disables used bowlers', () => {
+    const handleBowler = vi.fn();
+    const eligible = [
+      { id: 10, name: 'Mohammed Shami' },
+      { id: 9, name: 'Jasprit Bumrah' },
+    ];
+    const used = [{ id: 11, name: 'Mohammed Siraj' }];
+
+    render(
+      <BowlerPickerModal
+        currentOver={2}
+        maxOvers={5}
+        teamName="India"
+        eligibleBowlers={eligible}
+        usedBowlers={used}
+        onSelectBowler={handleBowler}
+      />
+    );
+
+    expect(screen.getByText(/OVER 2 OF 5/i)).toBeDefined();
+    expect(screen.getByText('Mohammed Siraj')).toBeDefined();
+    expect(screen.getByText(/QUOTA EXHAUSTED/i)).toBeDefined();
+    expect(screen.getByText('Mohammed Shami')).toBeDefined();
+    expect(screen.getByText('Jasprit Bumrah')).toBeDefined();
+
+    // Select Jasprit Bumrah
+    fireEvent.click(screen.getByText('Jasprit Bumrah'));
+
+    // Confirm
+    const confirmBtn = screen.getByText(/CONFIRM BOWLER/i);
+    fireEvent.click(confirmBtn);
+    expect(handleBowler).toHaveBeenCalledWith(9);
+  });
+
+  it('Scoreboard renders England and South Africa flags correctly', () => {
+    const engState: MatchState = {
+      ...mockMatchState,
+      user_team: { id: 'ENG', name: 'England' },
+      opponent_team: { id: 'SA', name: 'South Africa' },
+    };
+    render(<Scoreboard matchState={engState} />);
+
+    expect(screen.getAllByText('England').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('South Africa').length).toBeGreaterThan(0);
+  });
+});
+
