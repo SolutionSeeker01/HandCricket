@@ -135,7 +135,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
     return dots;
   };
 
-  // Batters block: Runs only, NO ball counts per Section 13 specification
+  // Batters block: Runs and balls faced
   const renderBatters = () => (
     <div className="flex items-center space-x-3 sm:space-x-4 text-xs font-semibold">
       {/* Striker */}
@@ -148,7 +148,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
           <span className="text-amber-400 ml-0.5">*</span>
         </span>
         <span className="text-amber-300 text-xs sm:text-sm font-black">
-          {striker.runs}
+          {striker.runs} ({striker.balls})
         </span>
       </div>
 
@@ -161,7 +161,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
           {non_striker.name || 'Batter 2'}
         </span>
         <span className="text-slate-300 text-xs sm:text-sm font-bold">
-          {non_striker.runs}
+          {non_striker.runs} ({non_striker.balls})
         </span>
       </div>
     </div>
@@ -298,7 +298,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
             </div>
           </div>
 
-          {/* Middle Row: Batters / Bowler without ball count notation */}
+          {/* Middle Row: Batters / Bowler */}
           <div className="grid grid-cols-2 gap-2 pt-1 border-t border-white/10 text-[11px]">
             {/* Left Col */}
             <div className="flex flex-col text-left">
@@ -306,11 +306,11 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-white font-bold truncate max-w-[85px]">{striker.name}*</span>
-                    <span className="text-amber-300 font-black">{striker.runs}</span>
+                    <span className="text-amber-300 font-black">{striker.runs} ({striker.balls})</span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300 text-[10px]">
                     <span className="truncate max-w-[85px]">{non_striker.name}</span>
-                    <span className="font-bold">{non_striker.runs}</span>
+                    <span className="font-bold">{non_striker.runs} ({non_striker.balls})</span>
                   </div>
                 </div>
               ) : (
@@ -330,11 +330,11 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
                 <div>
                   <div className="flex items-center justify-between">
                     <span className="text-white font-bold truncate max-w-[85px]">{striker.name}*</span>
-                    <span className="text-amber-300 font-black">{striker.runs}</span>
+                    <span className="text-amber-300 font-black">{striker.runs} ({striker.balls})</span>
                   </div>
                   <div className="flex items-center justify-between text-slate-300 text-[10px]">
                     <span className="truncate max-w-[85px]">{non_striker.name}</span>
-                    <span className="font-bold">{non_striker.runs}</span>
+                    <span className="font-bold">{non_striker.runs} ({non_striker.balls})</span>
                   </div>
                 </div>
               ) : (

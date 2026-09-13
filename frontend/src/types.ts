@@ -69,7 +69,14 @@ export interface EventFeedback {
   title: string;
   subtitle?: string;
   number?: number;
+  batsmanChoice?: number;
   userChoice?: number;
   computerChoice?: number;
   userTimedOut?: boolean;
+}
+
+export interface MilestoneFeedback {
+  batsmanName: string;
+  milestone: 50 | 100;
+  label: 'FIFTY!' | 'CENTURY!';
 }

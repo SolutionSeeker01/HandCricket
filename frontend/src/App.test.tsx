@@ -1,11 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
 import { Header } from './components/Header';
 import { PitchArena } from './components/PitchArena';
 import { Scoreboard } from './components/Scoreboard';
 import { InningsBreakModal } from './components/InningsBreakModal';
 import { MatchResultModal } from './components/MatchResultModal';
 import { MatchState } from './types';
+import { useCricketGame } from './hooks/useCricketGame';
 
 const mockMatchState: MatchState = {
   status: 'INNINGS_1',
@@ -77,9 +78,12 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(screen.getAllByText('4').length).toBeGreaterThan(0);
   });
 
-  it('Scoreboard displays batsman runs WITHOUT (Xb) ball count notation per Section 13', () => {
+  it('Scoreboard displays batsman score with balls faced in parentheses', () => {
     render(<Scoreboard matchState={mockMatchState} />);
-    expect(screen.queryByText(/b\)/)).toBeNull();
+    // Striker: Rohit Sharma 16 runs off 9 balls -> 16 (9)
+    // Non-striker: Virat Kohli 4 runs off 5 balls -> 4 (5)
+    expect(screen.getAllByText('16 (9)').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4 (5)').length).toBeGreaterThan(0);
   });
 
   it('PitchArena renders 1-6 buttons and triggers onSelectNumber when clicked', () => {
@@ -140,10 +144,10 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(screen.getByLabelText('Select 4')).toBeDefined();
   });
 
-  it('PitchArena displays delivery reveal for ordinary numbers (1, 2, 3, 5 runs)', () => {
+  it('When user is batting, ordinary result displays ONLY user batting number and not computer number', () => {
     render(
       <PitchArena
-        matchState={mockMatchState}
+        matchState={{ ...mockMatchState, user_is_batting: true }}
         selectedNumber={null}
         isWaiting={false}
         eventFeedback={{
@@ -158,16 +162,58 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
-    expect(screen.getByText('Delivery Reveal')).toBeDefined();
-    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(2);
+    // Old delivery reveal card text and VS comparison must NOT exist
+    expect(screen.queryByText('Delivery Reveal')).toBeNull();
+    expect(screen.queryByText('VS')).toBeNull();
+
+    // Result container exists without dark modal wrapper
+    const resultElement = screen.getByTestId('onfield-ball-result');
+    expect(resultElement).toBeDefined();
+
+    // Batter number 3 is displayed in the ball result
+    expect(resultElement.textContent).toContain('3');
+    // Computer's bowling choice 5 is NOT displayed in the ball result
+    expect(resultElement.textContent).not.toContain('5');
+
+    // Run outcome is displayed
     expect(screen.getByText('+3 RUNS')).toBeDefined();
   });
 
-  it('PitchArena displays FOUR celebration overlay with number reveal', () => {
+  it('When computer is batting, result displays ONLY computer batting number and not user bowling number', () => {
     render(
       <PitchArena
-        matchState={mockMatchState}
+        matchState={{ ...mockMatchState, user_is_batting: false }}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={{
+          type: 'FOUR',
+          runs: 4,
+          title: 'FOUR!',
+          number: 4,
+          userChoice: 2,
+          computerChoice: 4,
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    expect(screen.queryByText('Delivery Reveal')).toBeNull();
+    expect(screen.queryByText('VS')).toBeNull();
+
+    const resultElement = screen.getByTestId('onfield-ball-result');
+    expect(resultElement).toBeDefined();
+
+    // Computer's batting number 4 is displayed
+    expect(resultElement.textContent).toContain('4');
+    // User's bowling choice 2 is NOT displayed in the ball result
+    expect(resultElement.textContent).not.toContain('2');
+    expect(screen.getByText(/FOUR!/)).toBeDefined();
+  });
+
+  it('FOUR displays batter number, FOUR celebration, and opponent choice does not appear', () => {
+    render(
+      <PitchArena
+        matchState={{ ...mockMatchState, user_is_batting: true }}
         selectedNumber={null}
         isWaiting={false}
         eventFeedback={{
@@ -182,16 +228,18 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
-    expect(screen.getByText('FOUR!')).toBeDefined();
-    expect(screen.getByText('Delivery Reveal')).toBeDefined();
-    expect(screen.getAllByText('4').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(2);
+    const resultElement = screen.getByTestId('onfield-ball-result');
+    expect(resultElement.textContent).toContain('4');
+    expect(resultElement.textContent).not.toContain('2');
+    expect(screen.getByText(/FOUR!/)).toBeDefined();
+    expect(screen.queryByText('Delivery Reveal')).toBeNull();
+    expect(screen.queryByText('VS')).toBeNull();
   });
 
-  it('PitchArena displays SIX celebration overlay with number reveal', () => {
+  it('SIX displays batter number, SIX celebration, and opponent choice does not appear', () => {
     render(
       <PitchArena
-        matchState={mockMatchState}
+        matchState={{ ...mockMatchState, user_is_batting: true }}
         selectedNumber={null}
         isWaiting={false}
         eventFeedback={{
@@ -206,16 +254,18 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
-    expect(screen.getByText('SIX!')).toBeDefined();
-    expect(screen.getByText('Delivery Reveal')).toBeDefined();
-    expect(screen.getAllByText('6').length).toBeGreaterThanOrEqual(2);
-    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
+    const resultElement = screen.getByTestId('onfield-ball-result');
+    expect(resultElement.textContent).toContain('6');
+    expect(resultElement.textContent).not.toContain('1');
+    expect(screen.getByText(/SIX!/)).toBeDefined();
+    expect(screen.queryByText('Delivery Reveal')).toBeNull();
+    expect(screen.queryByText('VS')).toBeNull();
   });
 
-  it('PitchArena displays WICKET celebration overlay with out batsman and number reveal', () => {
+  it('WICKET displays WICKET celebration and player name WITHOUT showing batter number', () => {
     render(
       <PitchArena
-        matchState={mockMatchState}
+        matchState={{ ...mockMatchState, user_is_batting: true }}
         selectedNumber={null}
         isWaiting={false}
         eventFeedback={{
@@ -230,9 +280,77 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
+    const resultElement = screen.getByTestId('onfield-ball-result');
+    // Batter choice / number must NOT appear in the onfield result
+    expect(resultElement.textContent).not.toContain('3');
     expect(screen.getByText('WICKET!')).toBeDefined();
     expect(screen.getByText('Rohit Sharma is out!')).toBeDefined();
-    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText('Delivery Reveal')).toBeNull();
+    expect(screen.queryByText('VS')).toBeNull();
+  });
+
+  it('PitchArena renders exactly 6 circular input buttons with 1:1 aspect ratio', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    for (let num = 1; num <= 6; num++) {
+      const btn = screen.getByLabelText(`Select ${num}`);
+      expect(btn).toBeDefined();
+      expect(btn.className).toContain('rounded-full');
+      expect(btn.className).toContain('aspect-square');
+      expect(btn.style.aspectRatio).toBe('1 / 1');
+    }
+  });
+
+  it('PitchArena renders milestone celebration overlay for FIFTY with batsman name', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        milestoneFeedback={{
+          batsmanName: 'Virat Kohli',
+          milestone: 50,
+          label: 'FIFTY!',
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    const milestoneElement = screen.getByTestId('batsman-milestone-celebration');
+    expect(milestoneElement).toBeDefined();
+    expect(screen.getByText('FIFTY!')).toBeDefined();
+    expect(screen.getByText('Virat Kohli')).toBeDefined();
+  });
+
+  it('PitchArena renders milestone celebration overlay for CENTURY with batsman name', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        milestoneFeedback={{
+          batsmanName: 'Rohit Sharma',
+          milestone: 100,
+          label: 'CENTURY!',
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    const milestoneElement = screen.getByTestId('batsman-milestone-celebration');
+    expect(milestoneElement).toBeDefined();
+    expect(screen.getByText('CENTURY!')).toBeDefined();
+    expect(screen.getByText('Rohit Sharma')).toBeDefined();
   });
 
   it('Scoreboard places bowler on User side and batters on Computer side when computer is batting', () => {
@@ -304,5 +422,233 @@ describe('Slice 12 Frontend Component Tests', () => {
 
     expect(screen.getByText("It's a Tie!")).toBeDefined();
     expect(screen.getByText('Match tied.')).toBeDefined();
+  });
+});
+
+describe('useCricketGame milestone detection', () => {
+  let mockSocket: any;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockSocket = {
+      readyState: 1, // WebSocket.OPEN
+      send: vi.fn(),
+      close: vi.fn(),
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+    };
+    vi.stubGlobal('WebSocket', vi.fn().mockImplementation(function () {
+      return mockSocket;
+    }));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('triggers FIFTY milestone on crossing 50 and does not retrigger on 51', () => {
+    const { result } = renderHook(() => useCricketGame());
+
+    // Connect socket
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // 1. Striker at 48 -> no milestone
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 48, balls: 20 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 4,
+              bowler_choice: 2,
+              runs: 4,
+              is_wicket: false,
+              user_choice: 4,
+              computer_choice: 2,
+              user_timed_out: false,
+              event: 'FOUR',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    expect(result.current.milestoneFeedback).toBeNull();
+
+    // 2. Striker scores 4 -> runs: 52 (crosses 50!)
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 52, balls: 21 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 4,
+              bowler_choice: 1,
+              runs: 4,
+              is_wicket: false,
+              user_choice: 4,
+              computer_choice: 1,
+              user_timed_out: false,
+              event: 'FOUR',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    // Ball result is displayed first, milestone sequenced after 1400ms
+    act(() => {
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(result.current.milestoneFeedback).toEqual({
+      batsmanName: 'Rohit Sharma',
+      milestone: 50,
+      label: 'FIFTY!',
+    });
+
+    // 3. Next ball: striker scores 1 -> runs: 53 (already celebrated 50, must NOT retrigger!)
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 53, balls: 22 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 1,
+              bowler_choice: 3,
+              runs: 1,
+              is_wicket: false,
+              user_choice: 1,
+              computer_choice: 3,
+              user_timed_out: false,
+              event: 'NORMAL',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    // Milestone should NOT retrigger
+    expect(result.current.milestoneFeedback).toBeNull();
+  });
+
+  it('triggers CENTURY milestone on crossing 100 and does not retrigger on 101', () => {
+    const { result } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Striker at 96
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 96, balls: 45 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 2,
+              bowler_choice: 1,
+              runs: 2,
+              is_wicket: false,
+              user_choice: 2,
+              computer_choice: 1,
+              user_timed_out: false,
+              event: 'NORMAL',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    // Striker hits a 6 to reach 102 (crosses 100!)
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 102, balls: 46 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 6,
+              bowler_choice: 2,
+              runs: 6,
+              is_wicket: false,
+              user_choice: 6,
+              computer_choice: 2,
+              user_timed_out: false,
+              event: 'SIX',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(result.current.milestoneFeedback).toEqual({
+      batsmanName: 'Rohit Sharma',
+      milestone: 100,
+      label: 'CENTURY!',
+    });
+
+    // Next ball to 103 -> no retrigger
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 103, balls: 47 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 1,
+              bowler_choice: 5,
+              runs: 1,
+              is_wicket: false,
+              user_choice: 1,
+              computer_choice: 5,
+              user_timed_out: false,
+              event: 'NORMAL',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(result.current.milestoneFeedback).toBeNull();
   });
 });

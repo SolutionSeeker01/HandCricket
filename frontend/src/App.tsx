@@ -14,6 +14,7 @@ export default function App() {
     selectedNumber,
     isWaiting,
     eventFeedback,
+    milestoneFeedback,
     errorMessage,
     submitNumber,
     startNextInnings,
@@ -70,12 +71,13 @@ export default function App() {
       {/* Top Header */}
       <Header matchState={matchState} onOpenSettings={() => setShowSettings(true)} />
 
-      {/* Main Pitch Arena (Prompts, pitch, 1-6 buttons, event celebrations) */}
+      {/* Main Pitch Arena (Prompts, pitch, 1-6 buttons, event celebrations, milestones) */}
       <PitchArena
         matchState={matchState}
         selectedNumber={selectedNumber}
         isWaiting={isWaiting}
         eventFeedback={eventFeedback}
+        milestoneFeedback={milestoneFeedback}
         onSelectNumber={submitNumber}
       />
 

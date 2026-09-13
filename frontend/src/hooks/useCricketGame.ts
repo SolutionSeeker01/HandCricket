@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { EventFeedback, MatchState } from '../types';
+import { EventFeedback, MatchState, MilestoneFeedback } from '../types';
 
 export function useCricketGame() {
   const [matchState, setMatchState] = useState<MatchState | null>(null);
@@ -12,8 +12,12 @@ export function useCricketGame() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
+  const [milestoneFeedback, setMilestoneFeedback] = useState<MilestoneFeedback | null>(null);
   const feedbackTimeoutRef = useRef<number | null>(null);
+  const milestoneTimeoutRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const prevPlayerScoresRef = useRef<Record<string, number>>({});
+  const celebratedMilestonesRef = useRef<Set<string>>(new Set<string>());
 
   const connect = useCallback(() => {
     if (
@@ -82,16 +86,69 @@ export function useCricketGame() {
                 subtitle = lastBall.runs === 0 ? '0 Runs scored' : `+${lastBall.runs} Runs scored`;
               }
 
-              triggerFeedback({
+              // Check for 50 or 100 milestone on striker
+              let detectedMilestone: MilestoneFeedback | null = null;
+              const striker = data.match_state.striker;
+              if (striker && striker.name) {
+                const pKey = `${striker.id ?? striker.name}`;
+                const prevRuns = prevPlayerScoresRef.current[pKey] ?? 0;
+                const newRuns = striker.runs;
+                prevPlayerScoresRef.current[pKey] = newRuns;
+
+                const fiftyKey = `${pKey}_50`;
+                const centuryKey = `${pKey}_100`;
+
+                if (prevRuns < 100 && newRuns >= 100 && !celebratedMilestonesRef.current.has(centuryKey)) {
+                  celebratedMilestonesRef.current.add(centuryKey);
+                  detectedMilestone = {
+                    batsmanName: striker.name,
+                    milestone: 100,
+                    label: 'CENTURY!',
+                  };
+                } else if (prevRuns < 50 && newRuns >= 50 && !celebratedMilestonesRef.current.has(fiftyKey)) {
+                  celebratedMilestonesRef.current.add(fiftyKey);
+                  detectedMilestone = {
+                    batsmanName: striker.name,
+                    milestone: 50,
+                    label: 'FIFTY!',
+                  };
+                }
+              }
+
+              // Also update non-striker score tracking in ref
+              const nonStriker = data.match_state.non_striker;
+              if (nonStriker && nonStriker.name) {
+                const nKey = `${nonStriker.id ?? nonStriker.name}`;
+                prevPlayerScoresRef.current[nKey] = nonStriker.runs;
+              }
+
+              const ballFeedback: EventFeedback = {
                 type: lastBall.event,
                 runs: lastBall.runs,
                 title,
                 subtitle,
                 number: lastBall.runs,
+                batsmanChoice: lastBall.batsman_choice,
                 userChoice: lastBall.user_choice,
                 computerChoice: lastBall.computer_choice,
                 userTimedOut: lastBall.user_timed_out,
-              });
+              };
+
+              if (detectedMilestone) {
+                // Sequence ball result -> milestone celebration naturally
+                triggerFeedback(ballFeedback, 1400);
+                if (milestoneTimeoutRef.current) {
+                  window.clearTimeout(milestoneTimeoutRef.current);
+                }
+                milestoneTimeoutRef.current = window.setTimeout(() => {
+                  setMilestoneFeedback(detectedMilestone);
+                  milestoneTimeoutRef.current = window.setTimeout(() => {
+                    setMilestoneFeedback(null);
+                  }, 1500);
+                }, 1400);
+              } else {
+                triggerFeedback(ballFeedback, 1800);
+              }
             }
           }
         } else if (data.type === 'error') {
@@ -117,14 +174,14 @@ export function useCricketGame() {
     };
   }, []);
 
-  const triggerFeedback = (feedback: EventFeedback) => {
+  const triggerFeedback = (feedback: EventFeedback, durationMs = 1800) => {
     if (feedbackTimeoutRef.current) {
       window.clearTimeout(feedbackTimeoutRef.current);
     }
     setEventFeedback(feedback);
     feedbackTimeoutRef.current = window.setTimeout(() => {
       setEventFeedback(null);
-    }, 1800);
+    }, durationMs);
   };
 
   const submitNumber = useCallback((number: number) => {
@@ -158,6 +215,13 @@ export function useCricketGame() {
     setSelectedNumber(null);
     setIsWaiting(false);
     setEventFeedback(null);
+    setMilestoneFeedback(null);
+    prevPlayerScoresRef.current = {};
+    celebratedMilestonesRef.current.clear();
+    if (milestoneTimeoutRef.current) {
+      window.clearTimeout(milestoneTimeoutRef.current);
+      milestoneTimeoutRef.current = null;
+    }
     socketRef.current.send(JSON.stringify({ type: 'new_game' }));
   }, [connect]);
 
@@ -184,6 +248,7 @@ export function useCricketGame() {
     selectedNumber,
     isWaiting,
     eventFeedback,
+    milestoneFeedback,
     errorMessage,
     submitNumber,
     startNextInnings,

@@ -1,11 +1,12 @@
 import React from 'react';
-import { EventFeedback, MatchState } from '../types';
+import { EventFeedback, MatchState, MilestoneFeedback } from '../types';
 
 interface PitchArenaProps {
   matchState: MatchState | null;
   selectedNumber: number | null;
   isWaiting: boolean;
   eventFeedback: EventFeedback | null;
+  milestoneFeedback?: MilestoneFeedback | null;
   onSelectNumber: (num: number) => void;
 }
 
@@ -14,6 +15,7 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
   selectedNumber,
   isWaiting,
   eventFeedback,
+  milestoneFeedback,
   onSelectNumber,
 }) => {
   const userIsBatting = matchState ? matchState.user_is_batting : true;
@@ -21,85 +23,107 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
     matchState &&
     !isWaiting &&
     !eventFeedback &&
+    !milestoneFeedback &&
     matchState.status !== 'INNINGS_BREAK' &&
     matchState.status !== 'COMPLETED';
 
+  // Reveal ONLY the batter's number:
+  // When user is batting -> userChoice (or batsmanChoice)
+  // When computer is batting -> computerChoice (or batsmanChoice)
+  // Opponent bowling number is NEVER displayed.
+  const batterNumber = eventFeedback
+    ? (eventFeedback.batsmanChoice ?? (userIsBatting ? eventFeedback.userChoice : eventFeedback.computerChoice) ?? eventFeedback.number ?? null)
+    : null;
+
   return (
     <div className="relative w-full flex-1 flex flex-col items-center justify-end overflow-hidden select-none px-2 pb-2 sm:pb-3">
-      {/* 1. BALL RESULT REVEAL OVERLAY (EVERY BALL SHOWS YOU vs COMPUTER) */}
+      {/* 1. NATURAL ON-FIELD BALL RESULT (BATTER'S NUMBER ONLY, NO BLUE CARD, BRIGHT STADIUM VISIBLE) */}
       {eventFeedback && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none px-4 animate-in fade-in zoom-in-95 duration-150">
-          <div className="bg-slate-950/95 border-2 border-amber-400/80 rounded-3xl p-4 sm:p-5 shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md max-w-xs sm:max-w-sm w-full">
-            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-400/90 mb-1.5">
-              Delivery Reveal
-            </span>
-
-            {/* YOU vs COMPUTER NUMBERS */}
-            <div className="flex items-center justify-center space-x-5 sm:space-x-7 my-1.5">
-              {/* YOU */}
-              <div className="flex flex-col items-center">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                  You
-                </span>
-                <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 border-2 border-amber-400 flex items-center justify-center text-3xl sm:text-4xl font-black text-amber-300 shadow-md">
-                  {eventFeedback.userChoice ?? '-'}
-                </div>
+        <div
+          data-testid="onfield-ball-result"
+          className="absolute top-12 sm:top-20 inset-x-0 flex flex-col items-center justify-center z-30 pointer-events-none px-4 animate-in fade-in zoom-in-95 duration-150"
+        >
+          {/* 1. NORMAL BALL (0, 1, 2, 3, 5 RUNS) */}
+          {eventFeedback.type === 'NORMAL' && batterNumber !== null && (
+            <div className="flex flex-col items-center text-center">
+              <div className="text-7xl sm:text-9xl font-black text-white drop-shadow-[0_4px_24px_rgba(0,0,0,0.95)] tracking-tight leading-none font-sans">
+                {batterNumber}
               </div>
-
-              {/* VS */}
-              <div className="text-sm sm:text-base font-black italic text-slate-500 pt-5">
-                VS
-              </div>
-
-              {/* COMPUTER */}
-              <div className="flex flex-col items-center">
-                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
-                  Computer
-                </span>
-                <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 border-2 border-slate-600 flex items-center justify-center text-3xl sm:text-4xl font-black text-slate-100 shadow-md">
-                  {eventFeedback.computerChoice ?? '-'}
-                </div>
+              <div className="mt-2 sm:mt-3 text-2xl sm:text-4xl font-black tracking-wider text-amber-300 drop-shadow-[0_3px_14px_rgba(0,0,0,0.95)] uppercase font-sans">
+                {eventFeedback.runs === 0 ? 'DOT BALL (0 Runs)' : `+${eventFeedback.runs} ${eventFeedback.runs === 1 ? 'RUN' : 'RUNS'}`}
               </div>
             </div>
+          )}
 
-            {/* CONTEXTUAL OUTCOME BADGE */}
-            <div className="mt-3 w-full">
-              {eventFeedback.type === 'WICKET' && (
-                <div className="bg-red-600 border border-red-400 text-white font-black text-base sm:text-lg py-1.5 px-3 rounded-xl shadow-lg">
-                  WICKET!
-                  {eventFeedback.subtitle && (
-                    <div className="text-xs font-semibold text-red-100 mt-0.5">
-                      {eventFeedback.subtitle}
-                    </div>
-                  )}
-                </div>
-              )}
-              {eventFeedback.type === 'SIX' && (
-                <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-base sm:text-lg py-1.5 px-3 rounded-xl shadow-lg">
-                  <span>SIX!</span> <span className="text-xs font-bold">+6 RUNS</span>
-                </div>
-              )}
-              {eventFeedback.type === 'FOUR' && (
-                <div className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-slate-950 font-black text-base sm:text-lg py-1.5 px-3 rounded-xl shadow-lg">
-                  <span>FOUR!</span> <span className="text-xs font-bold">+4 RUNS</span>
-                </div>
-              )}
-              {eventFeedback.type === 'NORMAL' && (
-                <div className="bg-slate-800/95 border border-amber-400/40 text-amber-300 font-black text-sm sm:text-base py-1.5 px-3 rounded-xl shadow-md">
-                  {eventFeedback.runs === 0 ? 'DOT BALL (0 Runs)' : `+${eventFeedback.runs} ${eventFeedback.runs === 1 ? 'RUN' : 'RUNS'}`}
-                </div>
-              )}
-              {eventFeedback.userTimedOut && (
-                <div className="text-[10px] text-amber-400 font-semibold mt-1">
-                  ⏱️ Auto-picked on timeout
+          {/* 2. FOUR BOUNDARY */}
+          {eventFeedback.type === 'FOUR' && batterNumber !== null && (
+            <div className="flex flex-col items-center text-center animate-bounce">
+              <div className="text-8xl sm:text-9xl font-black text-amber-300 drop-shadow-[0_0_40px_rgba(251,191,36,0.85)] tracking-tight leading-none font-sans">
+                {batterNumber}
+              </div>
+              <div className="mt-2 sm:mt-3 px-6 sm:px-10 py-1.5 sm:py-2 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-slate-950 font-black text-2xl sm:text-4xl tracking-wider shadow-[0_6px_30px_rgba(251,191,36,0.6)] uppercase font-sans">
+                FOUR! <span className="text-base sm:text-2xl font-bold ml-1">+4 RUNS</span>
+              </div>
+            </div>
+          )}
+
+          {/* 3. SIX MAXIMUM */}
+          {eventFeedback.type === 'SIX' && batterNumber !== null && (
+            <div className="flex flex-col items-center text-center animate-bounce">
+              <div className="text-8xl sm:text-9xl font-black text-yellow-300 drop-shadow-[0_0_45px_rgba(234,179,8,0.9)] tracking-tight leading-none font-sans">
+                {batterNumber}
+              </div>
+              <div className="mt-2 sm:mt-3 px-7 sm:px-12 py-1.5 sm:py-2.5 rounded-full bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 font-black text-3xl sm:text-5xl tracking-widest shadow-[0_6px_35px_rgba(234,179,8,0.7)] uppercase font-sans">
+                SIX! <span className="text-lg sm:text-3xl font-bold ml-1">+6 RUNS</span>
+              </div>
+            </div>
+          )}
+
+          {/* 4. WICKET (NO BATTER NUMBER DISPLAYED PER SPECIFICATION) */}
+          {eventFeedback.type === 'WICKET' && (
+            <div className="flex flex-col items-center text-center">
+              <div className="px-8 sm:px-12 py-2 sm:py-3 rounded-full bg-red-600 text-white font-black text-3xl sm:text-5xl tracking-widest shadow-[0_6px_35px_rgba(220,38,38,0.75)] uppercase font-sans">
+                WICKET!
+              </div>
+              {eventFeedback.subtitle && (
+                <div className="mt-2 text-base sm:text-lg font-extrabold text-red-100 drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">
+                  {eventFeedback.subtitle}
                 </div>
               )}
             </div>
+          )}
+
+          {/* Auto-Timeout indicator */}
+          {eventFeedback.userTimedOut && (
+            <div className="mt-2 text-xs sm:text-sm text-amber-300 font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+              ⏱️ Auto-picked on timeout
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. BATSMAN MILESTONE CELEBRATION (50 / 100) */}
+      {milestoneFeedback && (
+        <div
+          data-testid="batsman-milestone-celebration"
+          className="absolute top-12 sm:top-20 inset-x-0 flex flex-col items-center justify-center z-30 pointer-events-none px-4 animate-in zoom-in-95 duration-200"
+        >
+          <div className="text-4xl sm:text-6xl mb-1 drop-shadow animate-bounce">
+            {milestoneFeedback.milestone === 100 ? '👑' : '🎉'}
+          </div>
+          <div className="text-2xl sm:text-4xl font-black text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.95)] uppercase tracking-wider font-sans">
+            {milestoneFeedback.batsmanName}
+          </div>
+          <div className="text-7xl sm:text-9xl font-black text-amber-300 drop-shadow-[0_0_35px_rgba(251,191,36,0.85)] tracking-tight leading-none my-1 font-sans">
+            {milestoneFeedback.milestone}
+          </div>
+          <div className="px-7 sm:px-12 py-1.5 sm:py-2.5 rounded-full bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-slate-950 font-black text-2xl sm:text-4xl tracking-widest shadow-[0_6px_30px_rgba(251,191,36,0.65)] uppercase font-sans">
+            {milestoneFeedback.label}
           </div>
         </div>
       )}
 
-      {/* 2. DYNAMIC DUAL-TONE HEADING WITH YELLOW BRUSH UNDERLINE */}
+      {/* 3. DYNAMIC DUAL-TONE HEADING WITH YELLOW BRUSH UNDERLINE */}
       <div className="w-full flex flex-col items-center justify-center mb-3 sm:mb-4 z-10">
         {isWaiting ? (
           <div className="flex flex-col items-center text-center">
@@ -157,9 +181,9 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
         )}
       </div>
 
-      {/* 3. CIRCULAR WHITE KEYPAD (1 - 6) MATCHING REFERENCE SPEC */}
-      <div className="w-full max-w-sm sm:max-w-lg flex items-center justify-center z-10 mb-2 sm:mb-4">
-        <div className="flex items-center justify-center gap-2.5 sm:gap-4 w-full px-2">
+      {/* 4. CIRCULAR WHITE KEYPAD (1 - 6) - GUARANTEED TRUE PERFECT CIRCLES */}
+      <div className="w-full flex items-center justify-center z-10 mb-2 sm:mb-4 px-2">
+        <div className="flex items-center justify-center gap-2 sm:gap-4 max-w-full">
           {[1, 2, 3, 4, 5, 6].map((num) => {
             const isSelected = selectedNumber === num;
             return (
@@ -167,9 +191,10 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
                 key={num}
                 onClick={() => onSelectNumber(num)}
                 disabled={!isTurnInteractive}
+                style={{ aspectRatio: '1 / 1' }}
                 className={`
-                  relative w-13 h-13 sm:w-18 sm:h-18 rounded-full aspect-square
-                  flex items-center justify-center font-black text-2xl sm:text-4xl
+                  relative w-12 h-12 sm:w-16 sm:h-16 rounded-full aspect-square shrink-0
+                  flex items-center justify-center font-black text-2xl sm:text-3xl leading-none
                   transition-all duration-150 select-none
                   ${
                     isSelected
@@ -181,7 +206,7 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
                 `}
                 aria-label={`Select ${num}`}
               >
-                <span>{num}</span>
+                <span className="translate-y-[-1px]">{num}</span>
               </button>
             );
           })}
