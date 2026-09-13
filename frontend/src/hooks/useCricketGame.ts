@@ -36,6 +36,8 @@ export function useCricketGame() {
   const [milestoneFeedback, setMilestoneFeedback] = useState<MilestoneFeedback | null>(null);
   const feedbackTimeoutRef = useRef<number | null>(null);
   const milestoneTimeoutRef = useRef<number | null>(null);
+  const matchEndTimeoutRef = useRef<number | null>(null);
+  const matchCelebratedRef = useRef<boolean>(false);
   const reconnectTimeoutRef = useRef<number | null>(null);
   const reconnectAttemptRef = useRef<number>(0);
   const countdownIntervalRef = useRef<number | null>(null);
@@ -304,12 +306,18 @@ export function useCricketGame() {
                 data.match_state.status === 'COMPLETED';
 
               if (detectedMilestone) {
+                const milestoneToCelebrate = detectedMilestone;
                 triggerFeedback(ballFeedback, 1400);
                 if (milestoneTimeoutRef.current) {
                   window.clearTimeout(milestoneTimeoutRef.current);
                 }
                 milestoneTimeoutRef.current = window.setTimeout(() => {
-                  setMilestoneFeedback(detectedMilestone);
+                  setMilestoneFeedback(milestoneToCelebrate);
+                  if (milestoneToCelebrate.milestone === 100) {
+                    soundManager.playCentury();
+                  } else if (milestoneToCelebrate.milestone === 50) {
+                    soundManager.playFifty();
+                  }
                   milestoneTimeoutRef.current = window.setTimeout(() => {
                     setMilestoneFeedback(null);
                   }, 1500);
@@ -334,6 +342,28 @@ export function useCricketGame() {
                 }, 1400);
               } else {
                 triggerFeedback(ballFeedback, 1500);
+              }
+
+              // Trigger authoritative match conclusion crowd audio once
+              if (data.match_state.status === 'COMPLETED' && !matchCelebratedRef.current) {
+                matchCelebratedRef.current = true;
+                const winner = data.match_state.winner;
+                const isTie = data.match_state.is_tie;
+                const userTeamName = data.match_state.user_team?.name;
+                const isUserWinner = Boolean(winner && userTeamName && winner === userTeamName);
+                const isUserLoss = Boolean(winner && userTeamName && winner !== userTeamName && !isTie);
+
+                if (matchEndTimeoutRef.current) {
+                  window.clearTimeout(matchEndTimeoutRef.current);
+                }
+                // Time with appearance of MatchResultModal (after 1500ms ball delivery feedback)
+                matchEndTimeoutRef.current = window.setTimeout(() => {
+                  if (isUserWinner) {
+                    soundManager.playMatchWin();
+                  } else if (isUserLoss) {
+                    soundManager.playMatchLoss();
+                  }
+                }, 1500);
               }
             }
           }
@@ -388,11 +418,13 @@ export function useCricketGame() {
   };
 
   const finishIntro = useCallback(() => {
+    soundManager.preloadAll();
     setAppStage('LANDING');
     appStageRef.current = 'LANDING';
   }, []);
 
   const startVsComputer = useCallback(() => {
+    soundManager.preloadAll();
     setAppStage('PRE_MATCH');
     appStageRef.current = 'PRE_MATCH';
     setTossActive(false);
@@ -432,6 +464,7 @@ export function useCricketGame() {
       return;
     }
     soundManager.playClick();
+    soundManager.preloadAll();
     setIsWaiting(true);
     setTossActive(true);
     tossActiveRef.current = true;
@@ -451,6 +484,7 @@ export function useCricketGame() {
       return;
     }
     soundManager.playCoinToss();
+    soundManager.preloadAll();
     setIsWaiting(true);
     setTossActive(false);
     tossActiveRef.current = false;
@@ -459,6 +493,7 @@ export function useCricketGame() {
 
   const finishToss = useCallback(() => {
     soundManager.playClick();
+    soundManager.preloadAll();
     setTossActive(false);
     tossActiveRef.current = false;
     if (preMatchState?.stage === 'BOWLER_SELECTION') {
@@ -474,6 +509,7 @@ export function useCricketGame() {
       return;
     }
     soundManager.playClick();
+    soundManager.preloadAll();
     setIsWaiting(true);
     socketRef.current.send(JSON.stringify({ type: 'select_bowler', bowler_id: bowlerId }));
   }, []);
@@ -487,6 +523,11 @@ export function useCricketGame() {
       window.clearTimeout(milestoneTimeoutRef.current);
       milestoneTimeoutRef.current = null;
     }
+    if (matchEndTimeoutRef.current) {
+      window.clearTimeout(matchEndTimeoutRef.current);
+      matchEndTimeoutRef.current = null;
+    }
+    matchCelebratedRef.current = false;
     stopCountdown();
     reconnectAttemptRef.current = 0;
     setTossActive(false);
@@ -538,6 +579,11 @@ export function useCricketGame() {
       window.clearTimeout(milestoneTimeoutRef.current);
       milestoneTimeoutRef.current = null;
     }
+    if (matchEndTimeoutRef.current) {
+      window.clearTimeout(matchEndTimeoutRef.current);
+      matchEndTimeoutRef.current = null;
+    }
+    matchCelebratedRef.current = false;
     stopCountdown();
     reconnectAttemptRef.current = 0;
     setSelectedNumber(null);
@@ -563,6 +609,7 @@ export function useCricketGame() {
 
   useEffect(() => {
     connect();
+    soundManager.preloadAll();
 
     return () => {
       stopCountdown();
@@ -573,6 +620,10 @@ export function useCricketGame() {
       if (milestoneTimeoutRef.current) {
         window.clearTimeout(milestoneTimeoutRef.current);
         milestoneTimeoutRef.current = null;
+      }
+      if (matchEndTimeoutRef.current) {
+        window.clearTimeout(matchEndTimeoutRef.current);
+        matchEndTimeoutRef.current = null;
       }
       if (reconnectTimeoutRef.current) {
         window.clearTimeout(reconnectTimeoutRef.current);

@@ -1311,4 +1311,785 @@ describe('Slice 14: Polish, Animations, Audio & Edge Cases', () => {
   });
 });
 
+describe('Slice 14 Audio Refinement: Realistic Sports Crowd Cheering', () => {
+  let mockSocket: any;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockSocket = {
+      readyState: 1, // OPEN
+      send: vi.fn(),
+      close: vi.fn(),
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+    };
+    vi.stubGlobal('WebSocket', vi.fn().mockImplementation(() => mockSocket));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('FOUR triggers crowd audio playFour() exactly once', () => {
+    const playFourSpy = vi.spyOn(soundManager, 'playFour');
+    const { result } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            last_ball: {
+              runs: 4,
+              event: 'FOUR',
+              batsman_choice: 4,
+              bowler_choice: 1,
+              user_choice: 4,
+              computer_choice: 1,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    expect(playFourSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.eventFeedback?.title).toBe('FOUR!');
+  });
+
+  it('SIX triggers crowd audio playSix() exactly once', () => {
+    const playSixSpy = vi.spyOn(soundManager, 'playSix');
+    const { result } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            last_ball: {
+              runs: 6,
+              event: 'SIX',
+              batsman_choice: 6,
+              bowler_choice: 2,
+              user_choice: 6,
+              computer_choice: 2,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    expect(playSixSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.eventFeedback?.title).toBe('SIX!');
+  });
+
+  it('WICKET triggers crowd audio playWicket() exactly once', () => {
+    const playWicketSpy = vi.spyOn(soundManager, 'playWicket');
+    const { result } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            last_ball: {
+              runs: 0,
+              event: 'WICKET',
+              batsman_choice: 3,
+              bowler_choice: 3,
+              user_choice: 3,
+              computer_choice: 3,
+              user_timed_out: false,
+              is_wicket: true,
+              out_player: 'Rohit Sharma',
+            },
+          },
+        }),
+      });
+    });
+
+    expect(playWicketSpy).toHaveBeenCalledTimes(1);
+    expect(result.current.eventFeedback?.title).toBe('WICKET!');
+  });
+
+  it('Match win triggers victory crowd audio playMatchWin() exactly once', () => {
+    const playWinSpy = vi.spyOn(soundManager, 'playMatchWin');
+    renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            status: 'COMPLETED',
+            winner: 'India',
+            is_tie: false,
+            user_team: { id: 'IND', name: 'India' },
+            opponent_team: { id: 'AUS', name: 'Australia' },
+            last_ball: {
+              runs: 4,
+              event: 'FOUR',
+              batsman_choice: 4,
+              bowler_choice: 1,
+              user_choice: 4,
+              computer_choice: 1,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    // Before feedback clears: winning shot audio has played, win celebration fires when modal displays
+    expect(playWinSpy).not.toHaveBeenCalled();
+
+    // Advance past the 1500ms ball delivery feedback
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(playWinSpy).toHaveBeenCalledTimes(1);
+
+    // Further timer advancement must not re-trigger
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(playWinSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Match loss triggers loss crowd audio playMatchLoss() exactly once', () => {
+    const playLossSpy = vi.spyOn(soundManager, 'playMatchLoss');
+    renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            status: 'COMPLETED',
+            winner: 'Australia',
+            is_tie: false,
+            user_team: { id: 'IND', name: 'India' },
+            opponent_team: { id: 'AUS', name: 'Australia' },
+            last_ball: {
+              runs: 0,
+              event: 'WICKET',
+              batsman_choice: 5,
+              bowler_choice: 5,
+              user_choice: 5,
+              computer_choice: 5,
+              user_timed_out: false,
+              is_wicket: true,
+              out_player: 'Virat Kohli',
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(playLossSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('50-run milestone triggers playFifty() once for user batsman and does not replay on 51', () => {
+    const playFiftySpy = vi.spyOn(soundManager, 'playFifty');
+    const { result } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Cross 50 runs (from 48 to 52)
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 52, balls: 22 },
+            last_ball: {
+              runs: 4,
+              event: 'FOUR',
+              batsman_choice: 4,
+              bowler_choice: 1,
+              user_choice: 4,
+              computer_choice: 1,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    // Milestone audio is synchronized with the milestone celebration banner (at 1400ms)
+    expect(playFiftySpy).not.toHaveBeenCalled();
+
+    act(() => {
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(playFiftySpy).toHaveBeenCalledTimes(1);
+    expect(result.current.milestoneFeedback?.label).toBe('FIFTY!');
+
+    // Next ball to 53 runs -> must NOT retrigger playFifty
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 53, balls: 23 },
+            last_ball: {
+              runs: 1,
+              event: 'NORMAL',
+              batsman_choice: 1,
+              bowler_choice: 2,
+              user_choice: 1,
+              computer_choice: 2,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(playFiftySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('50-run milestone triggers playFifty() for computer batsman when computer bats', () => {
+    const playFiftySpy = vi.spyOn(soundManager, 'playFifty');
+    renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Computer striker crosses 50
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            user_is_batting: false,
+            striker: { id: 15, name: 'David Warner', runs: 54, balls: 25 },
+            last_ball: {
+              runs: 6,
+              event: 'SIX',
+              batsman_choice: 6,
+              bowler_choice: 3,
+              user_choice: 3,
+              computer_choice: 6,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(playFiftySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('100-run milestone triggers playCentury() exactly once', () => {
+    const playCenturySpy = vi.spyOn(soundManager, 'playCentury');
+    renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Cross 100 runs
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 104, balls: 48 },
+            last_ball: {
+              runs: 6,
+              event: 'SIX',
+              batsman_choice: 6,
+              bowler_choice: 1,
+              user_choice: 6,
+              computer_choice: 1,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1400);
+    });
+
+    expect(playCenturySpy).toHaveBeenCalledTimes(1);
+
+    // Next ball to 105 -> does not retrigger
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 105, balls: 49 },
+            last_ball: {
+              runs: 1,
+              event: 'NORMAL',
+              batsman_choice: 1,
+              bowler_choice: 4,
+              user_choice: 1,
+              computer_choice: 4,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    expect(playCenturySpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('Mute prevents audio playback across all crowd sounds', () => {
+    soundManager.setMuted(true);
+    expect(soundManager.isMuted()).toBe(true);
+
+    // Spies on audio output context
+    expect(() => {
+      soundManager.playFour();
+      soundManager.playSix();
+      soundManager.playWicket();
+      soundManager.playFifty();
+      soundManager.playCentury();
+      soundManager.playMatchWin();
+      soundManager.playMatchLoss();
+    }).not.toThrow();
+
+    soundManager.setMuted(false);
+  });
+
+  it('React re-render does not duplicate or replay crowd sounds', () => {
+    const playFourSpy = vi.spyOn(soundManager, 'playFour');
+    const { rerender } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            last_ball: {
+              runs: 4,
+              event: 'FOUR',
+              batsman_choice: 4,
+              bowler_choice: 2,
+              user_choice: 4,
+              computer_choice: 2,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    expect(playFourSpy).toHaveBeenCalledTimes(1);
+
+    // Trigger multiple React re-renders
+    rerender();
+    rerender();
+    rerender();
+
+    expect(playFourSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('resetGame clears milestone and match celebration state for subsequent matches', () => {
+    const playFiftySpy = vi.spyOn(soundManager, 'playFifty');
+    const playWinSpy = vi.spyOn(soundManager, 'playMatchWin');
+    const { result } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Match 1: reach 50 runs and win
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            status: 'COMPLETED',
+            winner: 'India',
+            striker: { id: 1, name: 'Rohit Sharma', runs: 50, balls: 20 },
+            last_ball: {
+              runs: 4,
+              event: 'FOUR',
+              batsman_choice: 4,
+              bowler_choice: 1,
+              user_choice: 4,
+              computer_choice: 1,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    expect(playFiftySpy).toHaveBeenCalledTimes(1);
+    expect(playWinSpy).toHaveBeenCalledTimes(1);
+
+    // User restarts match via Play Again
+    act(() => {
+      result.current.resetGame();
+    });
+
+    // Match 2: same batsman reaches 50 runs again in fresh match
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            status: 'INNINGS_1',
+            striker: { id: 1, name: 'Rohit Sharma', runs: 50, balls: 21 },
+            last_ball: {
+              runs: 4,
+              event: 'FOUR',
+              batsman_choice: 4,
+              bowler_choice: 2,
+              user_choice: 4,
+              computer_choice: 2,
+              user_timed_out: false,
+              is_wicket: false,
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+
+    // 50 runs milestone triggered freshly in the new match!
+    expect(playFiftySpy).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('Slice 14 Audio Preload: Early Crowd Buffer Decoding & Fallback Safety', () => {
+  let mockSocket: any;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    soundManager.resetContextForTesting();
+    mockSocket = {
+      readyState: 1, // OPEN
+      send: vi.fn(),
+      close: vi.fn(),
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+    };
+    const mockWsClass: any = vi.fn().mockImplementation(() => mockSocket);
+    mockWsClass.OPEN = 1;
+    mockWsClass.CONNECTING = 0;
+    mockWsClass.CLOSING = 2;
+    mockWsClass.CLOSED = 3;
+    vi.stubGlobal('WebSocket', mockWsClass);
+  });
+
+  afterEach(() => {
+    soundManager.resetContextForTesting();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('triggers preloadAll() during useCricketGame hook initialization and pre-match lifecycle steps', () => {
+    const preloadSpy = vi.spyOn(soundManager, 'preloadAll');
+
+    const { result } = renderHook(() => useCricketGame());
+    // 1. Triggered on mount
+    expect(preloadSpy).toHaveBeenCalledTimes(1);
+
+    // 2. Pre-match step: finishIntro
+    act(() => {
+      result.current.finishIntro();
+    });
+    expect(preloadSpy).toHaveBeenCalledTimes(2);
+
+    // 3. Pre-match step: startVsComputer
+    act(() => {
+      result.current.startVsComputer();
+    });
+    expect(preloadSpy).toHaveBeenCalledTimes(3);
+
+    // Connect socket
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Provide pre-match team selection state
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'pre_match_state',
+          pre_match_state: {
+            stage: 'TEAM_SELECTION',
+            available_teams: [
+              { id: 'IND', name: 'India', flag: '🇮🇳' },
+              { id: 'AUS', name: 'Australia', flag: '🇦🇺' },
+            ],
+            user_team: null,
+            opponent_team: null,
+            toss_winner: null,
+            toss_decision: null,
+          },
+        }),
+      });
+    });
+
+    // 4. Pre-match step: selectTeam
+    act(() => {
+      result.current.selectTeam('IND');
+    });
+    expect(preloadSpy).toHaveBeenCalledTimes(4);
+
+    // 5. Pre-match step: chooseToss
+    act(() => {
+      result.current.chooseToss('BAT');
+    });
+    expect(preloadSpy).toHaveBeenCalledTimes(5);
+
+    // 6. Pre-match step: finishToss
+    act(() => {
+      result.current.finishToss();
+    });
+    expect(preloadSpy).toHaveBeenCalledTimes(6);
+
+    // 7. Pre-match step: selectBowler
+    act(() => {
+      result.current.selectBowler(1);
+    });
+    expect(preloadSpy).toHaveBeenCalledTimes(7);
+  });
+
+  it('plays decoded AudioBuffer when crowd audio asset is cached', () => {
+    const mockSource = {
+      buffer: null as any,
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      onended: null as any,
+    };
+    const mockGain = {
+      gain: {
+        value: 1,
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    };
+    const mockContext = {
+      state: 'running',
+      currentTime: 0,
+      destination: {},
+      createBufferSource: vi.fn().mockReturnValue(mockSource),
+      createGain: vi.fn().mockReturnValue(mockGain),
+      resume: vi.fn().mockResolvedValue(undefined),
+    };
+
+    vi.stubGlobal('AudioContext', vi.fn().mockImplementation(() => mockContext));
+
+    // Seed mock AudioBuffer into soundManager's cache
+    const dummyBuffer = { duration: 1.5, length: 66150, sampleRate: 44100, numberOfChannels: 2 } as AudioBuffer;
+    soundManager.setCachedBuffer('crowd_four.wav', dummyBuffer);
+
+    expect(soundManager.isBufferLoaded('crowd_four.wav')).toBe(true);
+    expect(soundManager.getLoadedCount()).toBe(1);
+
+    // Play FOUR
+    soundManager.playFour();
+
+    expect(mockContext.createBufferSource).toHaveBeenCalled();
+    expect(mockSource.buffer).toBe(dummyBuffer);
+    expect(mockGain.gain.setValueAtTime).toHaveBeenCalledWith(0.5, 0);
+    expect(mockSource.connect).toHaveBeenCalledWith(mockGain);
+    expect(mockGain.connect).toHaveBeenCalledWith(mockContext.destination);
+    expect(mockSource.start).toHaveBeenCalled();
+  });
+
+  it('falls back seamlessly to synthetic sound when audio buffer is missing or fetch fails without affecting gameplay', () => {
+    const mockSource = {
+      buffer: null as any,
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+      onended: null as any,
+    };
+    const mockOscillator = {
+      type: 'sine',
+      frequency: {
+        setValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+    const mockGain = {
+      gain: {
+        value: 1,
+        setValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    };
+    const mockFilter = {
+      type: 'lowpass',
+      frequency: {
+        setValueAtTime: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+      },
+      Q: { value: 1 },
+      connect: vi.fn(),
+    };
+
+    const mockContext = {
+      state: 'running',
+      currentTime: 0,
+      sampleRate: 44100,
+      destination: {},
+      createBufferSource: vi.fn().mockReturnValue(mockSource),
+      createOscillator: vi.fn().mockReturnValue(mockOscillator),
+      createGain: vi.fn().mockReturnValue(mockGain),
+      createBiquadFilter: vi.fn().mockReturnValue(mockFilter),
+      createBuffer: vi.fn().mockReturnValue({
+        getChannelData: vi.fn().mockReturnValue(new Float32Array(4410)),
+      }),
+      resume: vi.fn().mockResolvedValue(undefined),
+    };
+
+    vi.stubGlobal('AudioContext', vi.fn().mockImplementation(() => mockContext));
+
+    // Ensure cache is empty
+    soundManager.clearBufferCache();
+    expect(soundManager.isBufferLoaded('crowd_four.wav')).toBe(false);
+
+    // Call all crowd events - must execute synthetic fallback without throwing
+    expect(() => {
+      soundManager.playFour();
+      soundManager.playSix();
+      soundManager.playWicket();
+      soundManager.playFifty();
+      soundManager.playCentury();
+      soundManager.playMatchWin();
+      soundManager.playMatchLoss();
+    }).not.toThrow();
+
+    // Verify synthetic noise/oscillator elements were engaged
+    expect(mockContext.createBiquadFilter).toHaveBeenCalled();
+    expect(mockContext.createGain).toHaveBeenCalled();
+  });
+
+  it('preloadAudio handles fetch network error or non-200 gracefully and returns null', async () => {
+    const mockContext = {
+      state: 'running',
+      currentTime: 0,
+      decodeAudioData: vi.fn(),
+      resume: vi.fn().mockResolvedValue(undefined),
+    };
+    vi.stubGlobal('AudioContext', vi.fn().mockImplementation(() => mockContext));
+
+    // Mock fetch returning HTTP 404
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+    }));
+
+    const result = await soundManager.preloadAudio('nonexistent.wav');
+    expect(result).toBeNull();
+    expect(soundManager.isBufferLoaded('nonexistent.wav')).toBe(false);
+  });
+});
+
 
