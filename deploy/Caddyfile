@@ -1,5 +1,5 @@
 # Reverse proxy configuration for EC2 deployment
-# During Slice 11, {$DOMAIN} will be replaced with <elastic-ip>.sslip.io
+# During final EC2 deployment (Slice 16), {$DOMAIN} will be replaced with <elastic-ip>.sslip.io
 {$DOMAIN:localhost} {
     reverse_proxy app:8000
 }

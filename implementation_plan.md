@@ -150,7 +150,14 @@ Understanding the packet path prevents "black box" confusion during setup and de
 
 ## 3. The 22-Point EC2 Deployment Master Guide (DevOps Blueprint)
 
-When we reach **Slice 11 (Deployment of Walking Skeleton)**, we will walk through every step with full pedagogical explanations:
+This guide documents the complete production release pipeline. Following our updated execution workflow, deployment to AWS EC2 takes place as the **final release phase (Slice 16)** once the application is functionally complete and validated through local E2E testing.
+
+### The Three Operational Environments & Boundaries:
+1. **Development & Integration Testing (Slices 1–15)**: Fast feedback iteration. Backend runs via `uvicorn backend.app.main:app --reload`; frontend runs via Vite dev server (`npm run dev`) with hot-module replacement (HMR). Multi-connection tests run locally on `localhost`.
+2. **Local Deployment-Stack Validation**: Containerized multi-stage build (`Dockerfile` compiling Vite frontend into static assets served by FastAPI) and reverse-proxy networking (`docker compose up --build` with Caddy on `localhost`).
+3. **Production EC2 Deployment & Public Verification (Slice 16)**: Provisioning AWS virtual infrastructure, Elastic IP, firewall security groups, automated Let's Encrypt TLS provisioning via `sslip.io`, and multi-device public verification (phone + desktop).
+
+When we reach **Slice 16 (Production EC2 Deployment & Final Ship)**, we will walk through every step with full pedagogical explanations:
 
 1. **Creating the Instance**: Navigating AWS EC2 Console, choosing the optimal region (e.g., `us-east-1` or closest to you for lowest ping).
 2. **OS Image**: Selecting **Ubuntu 24.04 LTS (HVM), SSD Volume Type** (64-bit x86)—industry standard, massive community support.
@@ -219,21 +226,15 @@ We adhere strictly to our **one-thing-at-a-time** rule. Each slice has a single 
   Slice 8: Headless Computer Player (100-match automated Bot vs. Bot test)
 
 +-------------------------------------------------------------------------+
-|               BACKEND, WEBSOCKETS & DEPLOYMENT (DAY 1 - PART 2)          |
+|                    BACKEND & WEBSOCKETS (DAY 1 - PART 2)                |
 +-------------------------------------------------------------------------+
   Slice 9: Backend HTTP & WebSocket Foundation ("Walking Skeleton")
      │
      v
   Slice 10: WebSocket Game Protocol & 5-Second Turn Timer
-     │
-     v
-  Slice 11: Production Deployment of Backend Walking Skeleton to AWS EC2
-            (Launch EC2, configure Security Group, Elastic IP, Docker & Caddy.
-             Deploy backend walking skeleton and verify HTTP /health & public WSS
-             connectivity from phone/browser. The full React UI will be integrated in Slice 12).
 
 +-------------------------------------------------------------------------+
-|               FRONTEND & FULL-STACK INTEGRATION (DAY 2)                 |
+|               FRONTEND & FULL-STACK INTEGRATION (DAY 2 - PART 1)        |
 +-------------------------------------------------------------------------+
   Slice 12: Minimal Playable Arena UI (Vite + React + Tailwind + Bot Mode)
      │
@@ -244,7 +245,17 @@ We adhere strictly to our **one-thing-at-a-time** rule. Each slice has a single 
   Slice 14: Polish, Edge Cases & Animations (Coin flip, Wicket alert, Auto-pick badge)
      │
      v
-  Slice 15: Friend Mode E2E Testing, Multi-Device Verification & Final Ship
+  Slice 15: Friend Mode Local & Multi-Device E2E Testing & Integration QA
+
++-------------------------------------------------------------------------+
+|               PRODUCTION DEPLOYMENT & SHIP (DAY 2 - PART 2)             |
++-------------------------------------------------------------------------+
+  Slice 16: Production EC2 Deployment, Public Verification & Final Ship
+            (Consolidates former Slice 11 early deployment into the release gate.
+             Phase 1: Local Docker Compose + Caddy packaging & static asset serving validation.
+             Phase 2: AWS EC2 instance launch, Elastic IP, Security Groups 22/80/443.
+             Phase 3: Remote Docker + Caddy deployment & Let's Encrypt TLS auto-provisioning via sslip.io.
+             Phase 4: Public HTTPS/WSS live verification from mobile phone and remote browser; final sign-off).
 ```
 
 ---
