@@ -207,6 +207,14 @@ class BattingState:
                 if self._non_striker is not None:
                     self._striker, self._non_striker = self._non_striker, self._striker
 
+    def rotate_strike(self) -> None:
+        """Swap striker and non-striker at over completion.
+
+        If either striker or non-striker is None (e.g. all out), no rotation occurs.
+        """
+        if self._striker is not None and self._non_striker is not None:
+            self._striker, self._non_striker = self._non_striker, self._striker
+
     def as_view(self) -> "BattingStateView":
         """Return a read-only query view of this batting state."""
         return BattingStateView(self)

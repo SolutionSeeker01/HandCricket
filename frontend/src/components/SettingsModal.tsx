@@ -57,7 +57,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div className="flex justify-between items-center text-slate-300">
               <span>Overs per Innings:</span>
-              <span className="font-bold text-white">{matchState.max_overs} overs (30 balls)</span>
+              <span className="font-bold text-white">
+                {matchState.max_overs} overs ({matchState.max_overs * 6} balls)
+              </span>
             </div>
             {matchState.target && (
               <div className="flex justify-between items-center text-emerald-400 font-bold">

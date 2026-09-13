@@ -14,8 +14,10 @@ export const InningsBreakModal: React.FC<InningsBreakModalProps> = ({
     return null;
   }
 
-  const battingTeam = matchState.user_team;
-  const chasingTeam = matchState.opponent_team;
+  // Authoritative user_batted_first from match state, fallback to user_is_batting
+  const userBattedFirst = matchState.user_batted_first ?? matchState.user_is_batting;
+  const battingTeam = userBattedFirst ? matchState.user_team : matchState.opponent_team;
+  const chasingTeam = userBattedFirst ? matchState.opponent_team : matchState.user_team;
   const target = matchState.target;
   const score = matchState.innings_1_score ?? matchState.score;
   const wickets = matchState.innings_1_wickets ?? matchState.wickets;

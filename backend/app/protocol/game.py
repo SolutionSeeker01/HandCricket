@@ -579,6 +579,7 @@ class ComputerGameSession:
             "batting_team": batting_team.name,
             "bowling_team": bowling_team.name,
             "user_is_batting": user_is_batting,
+            "user_batted_first": self._user_is_batting_first,
             "score": score,
             "wickets": wickets,
             "overs": overs_str,
@@ -647,11 +648,6 @@ class ComputerGameSession:
                     msg["turn_id"] = self._turn_number
                     await self._send_json_locked(msg)
             elif self._is_innings_break:
-                msg = serialize_turn_started(0.0)
-                msg["match_state"] = self.get_match_state_dict()
-                msg["turn_id"] = self._turn_number
-                await self._send_json_locked(msg)
-            elif self._match.is_completed:
                 msg = serialize_turn_started(0.0)
                 msg["match_state"] = self.get_match_state_dict()
                 msg["turn_id"] = self._turn_number

@@ -8,13 +8,10 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onPlayVsComputer }
   const [showRules, setShowRules] = useState(false);
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 overflow-x-hidden select-none bg-[#0a192f] text-white">
-      {/* Stadium Background Atmosphere */}
-      <div
-        className="absolute inset-0 z-0 pointer-events-none bg-cover bg-center opacity-40 scale-105 filter blur-[1px]"
-        style={{ backgroundImage: "url('/stadium-bg.png')" }}
-      />
-      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-[#071322]/80 via-[#0a1c36]/60 to-[#050e1a]/95" />
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 overflow-x-hidden select-none bg-[url('/stadium_bg.jpg')] bg-cover bg-center text-white">
+      {/* Stadium Background Atmosphere Overlay */}
+      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-slate-950/55 via-black/35 to-slate-950/75" />
+      <div className="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-500/10 via-transparent to-black/50" />
 
       {/* Top Bar / Logo */}
       <header className="relative z-10 w-full max-w-4xl pt-6 sm:pt-10 flex flex-col items-center text-center">

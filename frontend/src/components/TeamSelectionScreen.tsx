@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TeamRoster } from '../types';
+import { TeamFlagBadge } from './TeamFlags';
 
 interface TeamSelectionScreenProps {
   availableTeams: TeamRoster[];
@@ -8,110 +9,23 @@ interface TeamSelectionScreenProps {
   isLoading?: boolean;
 }
 
-// Reusable SVG Flags for Team Selection
-const IndiaFlagSVG = () => (
-  <svg viewBox="0 0 36 36" className="w-12 h-12 rounded-full shadow-lg border-2 border-white/30 shrink-0">
-    <clipPath id="ts-clip-ind">
-      <circle cx="18" cy="18" r="18" />
-    </clipPath>
-    <g clipPath="url(#ts-clip-ind)">
-      <rect x="0" y="0" width="36" height="12" fill="#FF9933" />
-      <rect x="0" y="12" width="36" height="12" fill="#FFFFFF" />
-      <rect x="0" y="24" width="36" height="12" fill="#138808" />
-      <circle cx="18" cy="18" r="4.2" fill="none" stroke="#000080" strokeWidth="0.9" />
-      <circle cx="18" cy="18" r="0.9" fill="#000080" />
-      {Array.from({ length: 8 }).map((_, i) => (
-        <line
-          key={i}
-          x1="18"
-          y1="18"
-          x2={18 + 4.2 * Math.cos((i * Math.PI) / 4)}
-          y2={18 + 4.2 * Math.sin((i * Math.PI) / 4)}
-          stroke="#000080"
-          strokeWidth="0.6"
-        />
-      ))}
-    </g>
-  </svg>
-);
-
-const AustraliaFlagSVG = () => (
-  <svg viewBox="0 0 36 36" className="w-12 h-12 rounded-full shadow-lg border-2 border-white/30 shrink-0">
-    <clipPath id="ts-clip-aus">
-      <circle cx="18" cy="18" r="18" />
-    </clipPath>
-    <g clipPath="url(#ts-clip-aus)">
-      <rect x="0" y="0" width="36" height="36" fill="#00008B" />
-      <rect x="0" y="0" width="18" height="18" fill="#00247D" />
-      <line x1="0" y1="0" x2="18" y2="18" stroke="#FFFFFF" strokeWidth="2.5" />
-      <line x1="18" y1="0" x2="0" y2="18" stroke="#FFFFFF" strokeWidth="2.5" />
-      <line x1="0" y1="0" x2="18" y2="18" stroke="#CF142B" strokeWidth="1.2" />
-      <line x1="18" y1="0" x2="0" y2="18" stroke="#CF142B" strokeWidth="1.2" />
-      <line x1="9" y1="0" x2="9" y2="18" stroke="#FFFFFF" strokeWidth="3.5" />
-      <line x1="0" y1="9" x2="18" y2="9" stroke="#FFFFFF" strokeWidth="3.5" />
-      <line x1="9" y1="0" x2="9" y2="18" stroke="#CF142B" strokeWidth="1.8" />
-      <line x1="0" y1="9" x2="18" y2="9" stroke="#CF142B" strokeWidth="1.8" />
-      <circle cx="28" cy="8" r="1.2" fill="#FFFFFF" />
-      <circle cx="23" cy="13" r="1.2" fill="#FFFFFF" />
-      <circle cx="31" cy="15" r="1.2" fill="#FFFFFF" />
-      <circle cx="28" cy="22" r="1.5" fill="#FFFFFF" />
-      <circle cx="25" cy="29" r="1.7" fill="#FFFFFF" />
-    </g>
-  </svg>
-);
-
-const EnglandFlagSVG = () => (
-  <svg viewBox="0 0 36 36" className="w-12 h-12 rounded-full shadow-lg border-2 border-white/30 shrink-0">
-    <clipPath id="ts-clip-eng">
-      <circle cx="18" cy="18" r="18" />
-    </clipPath>
-    <g clipPath="url(#ts-clip-eng)">
-      <rect x="0" y="0" width="36" height="36" fill="#FFFFFF" />
-      <rect x="15" y="0" width="6" height="36" fill="#CF142B" />
-      <rect x="0" y="15" width="36" height="6" fill="#CF142B" />
-    </g>
-  </svg>
-);
-
-const SouthAfricaFlagSVG = () => (
-  <svg viewBox="0 0 36 36" className="w-12 h-12 rounded-full shadow-lg border-2 border-white/30 shrink-0">
-    <clipPath id="ts-clip-sa">
-      <circle cx="18" cy="18" r="18" />
-    </clipPath>
-    <g clipPath="url(#ts-clip-sa)">
-      <rect x="0" y="0" width="36" height="18" fill="#E03C31" />
-      <rect x="0" y="18" width="36" height="18" fill="#001489" />
-      <polygon points="0,0 16,18 0,36 6,36 22,18 6,0" fill="#FFFFFF" />
-      <rect x="16" y="14" width="20" height="8" fill="#FFFFFF" />
-      <polygon points="0,2 14,18 0,34 4,34 18,18 4,2" fill="#007749" />
-      <rect x="16" y="15.5" width="20" height="5" fill="#007749" />
-      <polygon points="0,5 11,18 0,31" fill="#FFB81C" />
-      <polygon points="0,8 8,18 0,28" fill="#000000" />
-    </g>
-  </svg>
-);
-
-const TEAM_DETAILS: Record<string, { flag: React.ReactNode; color: string; stars: string; highlight: string }> = {
+const TEAM_DETAILS: Record<string, { color: string; stars: string; highlight: string }> = {
   IND: {
-    flag: <IndiaFlagSVG />,
     color: 'from-blue-900/80 via-indigo-950/80 to-blue-950/90',
     stars: '⭐⭐',
     highlight: 'Rohit, Kohli, Bumrah',
   },
   AUS: {
-    flag: <AustraliaFlagSVG />,
     color: 'from-amber-950/80 via-yellow-950/70 to-slate-950/90',
     stars: '⭐⭐⭐⭐⭐',
     highlight: 'Warner, Maxwell, Starc',
   },
   ENG: {
-    flag: <EnglandFlagSVG />,
     color: 'from-sky-950/80 via-blue-950/70 to-slate-950/90',
     stars: '⭐⭐',
     highlight: 'Root, Stokes, Buttler',
   },
   SA: {
-    flag: <SouthAfricaFlagSVG />,
     color: 'from-emerald-950/80 via-green-950/70 to-slate-950/90',
     stars: '⭐',
     highlight: 'Klassen, Rabada, Jansen',
@@ -147,23 +61,20 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
   const viewingTeamObj = teamsToDisplay.find((t) => t.id === viewingSquadId);
 
   return (
-    <div className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 overflow-x-hidden select-none bg-[#0a192f] text-white">
-      {/* Stadium Background Atmosphere */}
-      <div
-        className="absolute inset-0 z-0 pointer-events-none bg-cover bg-center opacity-35 scale-105 filter blur-[1px]"
-        style={{ backgroundImage: "url('/stadium-bg.png')" }}
-      />
-      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-[#071322]/85 via-[#0a1c36]/65 to-[#050e1a]/95" />
+    <div className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 overflow-x-hidden select-none bg-[url('/stadium_bg.jpg')] bg-cover bg-center text-white">
+      {/* Stadium Background Atmosphere Overlay */}
+      <div className="absolute inset-0 z-0 pointer-events-none bg-gradient-to-b from-slate-950/60 via-black/35 to-slate-950/80" />
+      <div className="absolute inset-0 z-0 pointer-events-none bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-amber-500/10 via-transparent to-black/55" />
 
       {/* Header */}
       <header className="relative z-10 w-full max-w-4xl pt-4 sm:pt-6 flex flex-col items-center text-center">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/30 text-amber-300 font-extrabold text-xs tracking-widest uppercase mb-2">
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 border border-amber-400/40 text-amber-300 font-extrabold text-xs tracking-widest uppercase mb-2 shadow-lg backdrop-blur-md">
           STEP 1 OF 3 • TEAM SELECTION
         </div>
         <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-b from-yellow-200 via-amber-300 to-amber-500 drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">
           CHOOSE YOUR TEAM
         </h1>
-        <p className="text-slate-300 text-xs sm:text-sm font-medium mt-1">
+        <p className="text-slate-300 text-xs sm:text-sm font-medium mt-1 drop-shadow-md">
           Pick your national side. Computer AI will automatically select an opponent team.
         </p>
       </header>
@@ -193,7 +104,7 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
               }`}
             >
               <div className="flex items-center gap-4">
-                {meta.flag}
+                <TeamFlagBadge id={team.id} className="w-12 h-12" />
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide">

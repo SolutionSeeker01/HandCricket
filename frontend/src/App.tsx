@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BowlerPickerModal } from './components/BowlerPickerModal';
 import { Header } from './components/Header';
 import { InningsBreakModal } from './components/InningsBreakModal';
+import { IntroScreen } from './components/IntroScreen';
 import { LandingScreen } from './components/LandingScreen';
 import { MatchResultModal } from './components/MatchResultModal';
 import { PitchArena } from './components/PitchArena';
@@ -15,6 +16,8 @@ export default function App() {
   const {
     appStage,
     preMatchState,
+    tossActive,
+    tossOutcome,
     bowlerSelectionPrompt,
     matchState,
     connectionStatus,
@@ -23,10 +26,12 @@ export default function App() {
     eventFeedback,
     milestoneFeedback,
     errorMessage,
+    finishIntro,
     startVsComputer,
     goToLanding,
     selectTeam,
     chooseToss,
+    finishToss,
     selectBowler,
     resetPreMatch,
     submitNumber,
@@ -56,23 +61,35 @@ export default function App() {
     );
   }
 
-  // 2. Landing Screen
+  // 2. Intro Title Screen Sequence
+  if (appStage === 'INTRO') {
+    return <IntroScreen onFinish={finishIntro} />;
+  }
+
+  // 3. Landing Screen
   if (appStage === 'LANDING') {
     return <LandingScreen onPlayVsComputer={startVsComputer} />;
   }
 
-  // 3. Pre-Match Stage Flows
+  // 4. Pre-Match Stage Flows
   if (appStage === 'PRE_MATCH') {
     const stage = preMatchState?.stage || 'TEAM_SELECTION';
 
-    if (stage === 'TOSS_DECISION' || stage === 'TOSS_RESULT') {
+    if (tossActive || stage === 'TOSS_DECISION' || stage === 'TOSS_RESULT') {
+      const uTeam = tossOutcome?.userTeam ?? preMatchState?.user_team ?? null;
+      const oTeam = tossOutcome?.opponentTeam ?? preMatchState?.opponent_team ?? null;
+      const tWinner = tossOutcome?.winner ?? preMatchState?.toss_winner ?? null;
+      const tossKey = `toss_${uTeam?.id || 'u'}_${oTeam?.id || 'o'}_${tWinner || 'pending'}`;
+
       return (
         <TossScreen
-          userTeam={preMatchState?.user_team ?? null}
-          opponentTeam={preMatchState?.opponent_team ?? null}
-          tossWinner={preMatchState?.toss_winner ?? null}
-          tossDecision={preMatchState?.toss_decision ?? null}
+          key={tossKey}
+          userTeam={uTeam}
+          opponentTeam={oTeam}
+          tossWinner={tWinner}
+          tossDecision={tossOutcome?.decision ?? preMatchState?.toss_decision ?? null}
           onChooseToss={chooseToss}
+          onProceed={finishToss}
           isLoading={isWaiting}
         />
       );
@@ -128,24 +145,24 @@ export default function App() {
       {/* Bottom Compact Scoreboard */}
       <Scoreboard matchState={matchState} />
 
-      {/* Innings Break Modal */}
-      {matchState && (
+      {/* Innings Break Modal — guarded so 6th ball delivery result is visible first */}
+      {matchState && !eventFeedback && (
         <InningsBreakModal
           matchState={matchState}
           onStartNextInnings={startNextInnings}
         />
       )}
 
-      {/* Match Result Modal (Win, Loss, Tie) */}
-      {matchState && (
+      {/* Match Result Modal (Win, Loss, Tie) — guarded so winning ball delivery result is visible first */}
+      {matchState && !eventFeedback && (
         <MatchResultModal
           matchState={matchState}
           onPlayAgain={resetGame}
         />
       )}
 
-      {/* Over-by-Over Bowler Selection Modal Overlay */}
-      {bowlerSelectionPrompt && (
+      {/* Over-by-Over Bowler Selection Modal Overlay — guarded so 6th ball delivery result is visible first */}
+      {bowlerSelectionPrompt && !eventFeedback && (
         <BowlerPickerModal
           currentOver={bowlerSelectionPrompt.current_over}
           maxOvers={matchState?.max_overs || 5}

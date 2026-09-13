@@ -20,6 +20,7 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
     result_description,
     user_team,
     opponent_team,
+    user_batted_first,
     innings_1_score,
     innings_1_wickets,
     innings_2_score,
@@ -28,6 +29,10 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
 
   const isUserWinner = winner === user_team.name;
   const isOpponentWinner = winner === opponent_team.name;
+
+  const userBattedFirst = user_batted_first ?? true;
+  const innings1Team = userBattedFirst ? user_team : opponent_team;
+  const innings2Team = userBattedFirst ? opponent_team : user_team;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-lg animate-in fade-in duration-300">
@@ -84,14 +89,14 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
 
         {/* Match Summary Box */}
         <div className="w-full bg-slate-900/90 border border-slate-700/70 rounded-2xl p-4 my-4 shadow-inner space-y-2 text-xs sm:text-sm">
-          <div className="flex justify-between items-center text-slate-300 font-semibold border-b border-slate-800 pb-2">
-            <span>{user_team.name}</span>
+          <div data-testid="innings-1-summary" className="flex justify-between items-center text-slate-300 font-semibold border-b border-slate-800 pb-2">
+            <span>{innings1Team.name}</span>
             <span className="font-extrabold text-white">
               {innings_1_score} / {innings_1_wickets}
             </span>
           </div>
-          <div className="flex justify-between items-center text-slate-300 font-semibold border-b border-slate-800 pb-2">
-            <span>{opponent_team.name}</span>
+          <div data-testid="innings-2-summary" className="flex justify-between items-center text-slate-300 font-semibold border-b border-slate-800 pb-2">
+            <span>{innings2Team.name}</span>
             <span className="font-extrabold text-white">
               {innings_2_score} / {innings_2_wickets}
             </span>

@@ -43,6 +43,7 @@ export interface MatchState {
   batting_team: string;
   bowling_team: string;
   user_is_batting: boolean;
+  user_batted_first?: boolean;
   score: number;
   wickets: number;
   overs: string;
@@ -81,7 +82,7 @@ export interface MilestoneFeedback {
   label: 'FIFTY!' | 'CENTURY!';
 }
 
-export type AppStage = 'LANDING' | 'PRE_MATCH' | 'IN_MATCH';
+export type AppStage = 'INTRO' | 'LANDING' | 'PRE_MATCH' | 'IN_MATCH';
 
 export type PreMatchStage =
   | 'TEAM_SELECTION'

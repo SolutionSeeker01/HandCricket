@@ -223,6 +223,7 @@ class Innings:
             self._balls_in_current_over = 0
             if not self._is_completed:
                 self._current_over += 1
+                self._batting_state.rotate_strike()
 
     def __repr__(self) -> str:
         return (

@@ -93,6 +93,18 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
             </div>
           )}
 
+          {/* 5. OVER COMPLETE BANNER */}
+          {eventFeedback.title === 'OVER COMPLETE' && (
+            <div className="flex flex-col items-center text-center animate-in fade-in zoom-in-95 duration-200">
+              <div className="px-8 sm:px-12 py-2 sm:py-3 rounded-full bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-600 text-white font-black text-2xl sm:text-4xl tracking-widest shadow-[0_6px_35px_rgba(59,130,246,0.7)] uppercase font-sans border border-blue-300/40">
+                OVER COMPLETE
+              </div>
+              <div className="mt-2 text-xs sm:text-sm font-bold text-slate-200 drop-shadow">
+                Strike rotated • Preparing next over
+              </div>
+            </div>
+          )}
+
           {/* Auto-Timeout indicator */}
           {eventFeedback.userTimedOut && (
             <div className="mt-2 text-xs sm:text-sm text-amber-300 font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
@@ -182,8 +194,8 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
       </div>
 
       {/* 4. CIRCULAR WHITE KEYPAD (1 - 6) - GUARANTEED TRUE PERFECT CIRCLES */}
-      <div className="w-full flex items-center justify-center z-10 mb-2 sm:mb-4 px-2">
-        <div className="flex items-center justify-center gap-2 sm:gap-4 max-w-full">
+      <div className="w-full flex items-center justify-center z-10 mb-2 sm:mb-4 px-1 sm:px-2">
+        <div className="flex items-center justify-center gap-1.5 min-[370px]:gap-2 sm:gap-4 max-w-full">
           {[1, 2, 3, 4, 5, 6].map((num) => {
             const isSelected = selectedNumber === num;
             return (
@@ -193,8 +205,8 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
                 disabled={!isTurnInteractive}
                 style={{ aspectRatio: '1 / 1' }}
                 className={`
-                  relative w-12 h-12 sm:w-16 sm:h-16 rounded-full aspect-square shrink-0
-                  flex items-center justify-center font-black text-2xl sm:text-3xl leading-none
+                  relative w-10 h-10 min-[370px]:w-12 min-[370px]:h-12 sm:w-16 sm:h-16 rounded-full aspect-square shrink-0
+                  flex items-center justify-center font-black text-xl min-[370px]:text-2xl sm:text-3xl leading-none
                   transition-all duration-150 select-none
                   ${
                     isSelected

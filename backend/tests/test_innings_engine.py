@@ -372,14 +372,14 @@ def test_realistic_sequential_innings_progression():
     assert innings.striker == 3
     assert innings.non_striker == 2
 
-    # Ball 6: Batsman 3 scores 2 runs (even -> no swap)
+    # Ball 6: Batsman 3 scores 2 runs (even -> no ball swap, but over-end swap rotates strike)
     innings.record_ball(resolve_ball(2, 4))
     assert innings.total_balls == 6
     assert innings.balls_in_current_over == 0
     assert innings.current_over == 2
     assert innings.total_runs == 16
-    assert innings.striker == 3
-    assert innings.non_striker == 2
+    assert innings.striker == 2  # Rotated at over completion
+    assert innings.non_striker == 3
     assert innings.over_complete is True
     assert innings.innings_complete is False
 
@@ -451,15 +451,15 @@ def test_wicket_on_thirtieth_ball_counts_and_completes_innings():
 
 
 # ---------------------------------------------------------------------------
-# 11. Strict Rule: No Automatic Striker Change at Over End
+# 11. Over-End Strike Rotation
 # ---------------------------------------------------------------------------
 
 
-def test_no_automatic_striker_change_at_over_end():
-    """Over completion must NOT automatically swap striker and non-striker."""
+def test_over_end_strike_rotation():
+    """Over completion must automatically swap striker and non-striker."""
     innings = Innings()
 
-    # Bowl 6 balls with 2 runs each (even runs -> no odd-run swap occurs)
+    # Bowl 6 balls with 2 runs each (even runs -> no odd-run swap occurs during balls)
     for _ in range(6):
         innings.record_ball(make_run_ball(2))
 
@@ -467,9 +467,9 @@ def test_no_automatic_striker_change_at_over_end():
     assert innings.current_over == 2
     assert innings.over_complete is True
 
-    # Batsman 1 should STILL be striker, and Batsman 2 should STILL be non-striker
-    assert innings.striker == 1
-    assert innings.non_striker == 2
+    # Batsman 2 is now striker, and Batsman 1 is now non-striker due to over-end swap
+    assert innings.striker == 2
+    assert innings.non_striker == 1
 
 
 # ---------------------------------------------------------------------------
@@ -648,7 +648,7 @@ def test_full_eleven_player_all_out_innings():
     # At 10 wickets with 11 players, no active striker remains
     assert innings.wickets == 10
     assert innings.striker is None
-    assert innings.non_striker == 2  # Batsman 2 remains stranded not out
+    assert innings.non_striker == 8  # Batsman 8 remains stranded not out (Batsman 2 faced ball 7 and was dismissed)
     assert innings.innings_complete is True
     assert innings.is_completed is True
     assert innings.total_balls == 10
@@ -678,7 +678,8 @@ def test_odd_run_on_ball_six_over_completion_preserves_swap():
     assert innings.striker == 1
     assert innings.non_striker == 2
 
-    # Ball 6: 1 run (ODD RUN) -> batsman 1 scores 1 and ends are swapped!
+    # Ball 6: 1 run (ODD RUN) -> batsman 1 scores 1, run-swap sets striker=2, non_striker=1.
+    # Then over completion triggers over-end swap -> striker=1, non_striker=2!
     innings.record_ball(make_run_ball(1))
 
     # Over completes
@@ -688,21 +689,94 @@ def test_odd_run_on_ball_six_over_completion_preserves_swap():
     assert innings.over_complete is True
     assert innings.innings_complete is False
 
-    # Striker should be batsman 2 (due to odd run), non-striker batsman 1
-    # Crucially: no extra strike swap occurred merely because the over completed!
-    assert innings.striker == 2
-    assert innings.non_striker == 1
+    # Striker should be batsman 1 (due to odd run swap + over-end swap)
+    assert innings.striker == 1
+    assert innings.non_striker == 2
     assert innings.batting_state.get_batsman_score(1) == 11  # 5*2 + 1
     assert innings.batting_state.get_batsman_score(2) == 0
 
-    # Ball 7 (Ball 1 of Over 2): Batsman 2 faces and scores 4 runs (even)
+    # Ball 7 (Ball 1 of Over 2): Batsman 1 faces and scores 4 runs (even)
     innings.record_ball(make_run_ball(4))
     assert innings.total_balls == 7
     assert innings.balls_in_current_over == 1
     assert innings.current_over == 2
+    assert innings.striker == 1
+    assert innings.non_striker == 2
+    assert innings.batting_state.get_batsman_score(1) == 15
+    assert innings.total_runs == 15
+
+
+# ---------------------------------------------------------------------------
+# 16. Comprehensive Over-End Strike Rotation Scenarios
+# ---------------------------------------------------------------------------
+
+
+def test_wicket_on_ball_six_incoming_batsman_becomes_non_striker():
+    """Wicket on ball 6: next batsman enters, then over-end swap rotates established non-striker to strike."""
+    innings = Innings()
+    # Balls 1-5: 0 runs, Batsman 1 faces
+    for _ in range(5):
+        innings.record_ball(resolve_ball(1, 2))  # 1 run each
+        # After 5 odd balls:
+        # Ball 1: 1 run -> striker 2, non-striker 1
+        # Ball 2: 1 run -> striker 1, non-striker 2
+        # Ball 3: 1 run -> striker 2, non-striker 1
+        # Ball 4: 1 run -> striker 1, non-striker 2
+        # Ball 5: 1 run -> striker 2, non-striker 1
+
     assert innings.striker == 2
     assert innings.non_striker == 1
-    assert innings.batting_state.get_batsman_score(2) == 4
-    assert innings.total_runs == 15
+
+    # Ball 6: Batsman 2 gets OUT (3 vs 3)!
+    # Batsman 3 enters as striker; Batsman 1 remains non-striker
+    # Then over completion triggers over-end rotation: Batsman 1 becomes striker, Batsman 3 non-striker!
+    innings.record_ball(resolve_ball(3, 3))
+    assert innings.wickets == 1
+    assert innings.total_balls == 6
+    assert innings.current_over == 2
+    assert innings.striker == 1  # Established batsman rotated to strike
+    assert innings.non_striker == 3  # New batsman rotated to non-striker end
+
+
+def test_dot_ball_on_ball_six_rotates_strike():
+    """Dot ball (0 runs) on ball 6 leaves same batsman facing ball, then over-end swap rotates strike."""
+    innings = Innings()
+    # 6 consecutive dot balls (0 runs): bat choice differs but runs=0 cannot occur in Hand Cricket except via dot or wicket
+    # In Hand Cricket, runs are scored if choices differ. To test 2 runs (even):
+    for _ in range(6):
+        innings.record_ball(resolve_ball(2, 4))
+
+    assert innings.total_balls == 6
+    assert innings.current_over == 2
+    assert innings.striker == 2
+    assert innings.non_striker == 1
+
+
+def test_boundary_six_on_ball_six_rotates_strike():
+    """Six (6 runs, even) on ball 6: no run swap, then over-end swap rotates strike."""
+    innings = Innings()
+    for _ in range(5):
+        innings.record_ball(resolve_ball(2, 4))  # 2 runs each -> no swap, striker=1
+    assert innings.striker == 1
+
+    # Ball 6: 6 runs (even) -> striker 1 scores 6, no mid-ball swap
+    innings.record_ball(resolve_ball(6, 1))
+    assert innings.total_balls == 6
+    assert innings.current_over == 2
+    assert innings.striker == 2
+    assert innings.non_striker == 1
+
+
+def test_final_over_ball_six_does_not_advance_or_crash():
+    """On final legal ball of innings (e.g. 5.6 balls = 30 balls), innings completes cleanly."""
+    innings = Innings(max_overs=1)  # 1-over innings
+    for _ in range(6):
+        innings.record_ball(resolve_ball(4, 2))
+
+    assert innings.total_balls == 6
+    assert innings.innings_complete is True
+    assert innings.is_completed is True
+    assert innings.current_over == 1
+
 
 

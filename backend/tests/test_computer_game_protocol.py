@@ -31,6 +31,7 @@ def test_computer_mode_connection_and_turn_started():
         assert state["user_team"]["id"] == "IND"
         assert state["opponent_team"]["id"] == "AUS"
         assert state["user_is_batting"] is True
+        assert state["user_batted_first"] is True
         assert state["striker"]["name"] == "Rohit Sharma"
         assert state["striker"]["runs"] == 0
         assert state["non_striker"]["name"] == "Shubman Gill"

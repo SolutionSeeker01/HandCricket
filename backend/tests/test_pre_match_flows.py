@@ -134,6 +134,7 @@ def test_user_wins_toss_and_chooses_bat():
         turn_msg = ws.receive_json()
         assert turn_msg["type"] == "turn_started"
         assert turn_msg["match_state"]["user_is_batting"] is True
+        assert turn_msg["match_state"]["user_batted_first"] is True
         assert turn_msg["match_state"]["user_team"]["id"] == "IND"
         assert turn_msg["match_state"]["opponent_team"]["id"] == "AUS"
         assert turn_msg["match_state"]["striker"]["name"] == "Rohit Sharma"
@@ -170,6 +171,7 @@ def test_user_wins_toss_and_chooses_bowl():
         turn_msg = ws.receive_json()
         assert turn_msg["type"] == "turn_started"
         assert turn_msg["match_state"]["user_is_batting"] is False
+        assert turn_msg["match_state"]["user_batted_first"] is False
         assert turn_msg["match_state"]["striker"]["name"] == "David Warner"
         assert turn_msg["match_state"]["bowler"]["name"] == "Mohammed Siraj"
 
@@ -203,6 +205,7 @@ def test_computer_wins_toss_and_chooses_bat():
         turn_msg = ws.receive_json()
         assert turn_msg["type"] == "turn_started"
         assert turn_msg["match_state"]["user_is_batting"] is False
+        assert turn_msg["match_state"]["user_batted_first"] is False
         assert turn_msg["match_state"]["bowler"]["name"] == "Mohammed Shami"
 
 
@@ -224,6 +227,7 @@ def test_computer_wins_toss_and_chooses_bowl():
         turn_msg = ws.receive_json()
         assert turn_msg["type"] == "turn_started"
         assert turn_msg["match_state"]["user_is_batting"] is True
+        assert turn_msg["match_state"]["user_batted_first"] is True
         assert turn_msg["match_state"]["bowler"]["name"] == "Mitchell Starc"
 
 
@@ -423,4 +427,58 @@ def test_first_innings_role_derivation_permutations():
             else:
                 assert next_msg["type"] == "turn_started"
                 assert next_msg["match_state"]["user_is_batting"] is (exp_bat_first == "user")
+
+
+def test_reset_game_starts_fresh_pre_match_lifecycle():
+    """Client sending new_game must initiate fresh pre-match lifecycle with fresh toss."""
+    # First game: User won toss ('A')
+    # Second game: Computer won toss ('B')
+    tosses = iter(["A", "B"])
+    session = ComputerGameSession(
+        skip_pre_match=False,
+        toss_chooser=lambda: next(tosses),
+        computer_team_chooser=lambda: "AUS",
+        computer_decision_chooser=lambda: TossDecision.BAT,
+        computer_bowler_chooser=lambda eligible: 11,
+    )
+    reset_standalone_computer_session(session)
+
+    with client.websocket_connect("/ws?mode=computer&skip_pre_match=false") as ws:
+        # 1. Initial pre-match state
+        init_msg = ws.receive_json()
+        assert init_msg["type"] == TYPE_PRE_MATCH_STATE
+        assert init_msg["stage"] == "TEAM_SELECTION"
+
+        # 2. Select team -> First toss: User wins
+        ws.send_json({"type": TYPE_SELECT_TEAM, "team_id": "IND"})
+        toss_1 = ws.receive_json()
+        assert toss_1["type"] == TYPE_PRE_MATCH_STATE
+        assert toss_1["stage"] == "TOSS_DECISION"
+        assert toss_1["toss_winner"] == "user"
+
+        # Choose BAT -> Match starts
+        ws.send_json({"type": TYPE_CHOOSE_TOSS, "decision": "BAT"})
+        turn_1 = ws.receive_json()
+        assert turn_1["type"] == "turn_started"
+        assert session.match is not None
+
+        # 3. Request new_game restart
+        ws.send_json({"type": "new_game"})
+        restart_msg = ws.receive_json()
+        assert restart_msg["type"] == TYPE_PRE_MATCH_STATE
+        assert restart_msg["stage"] == "TEAM_SELECTION"
+        assert restart_msg["user_team"] is None
+        assert restart_msg["toss_winner"] is None
+        assert session.match is None  # Previous match discarded
+
+        # 4. Select team again -> Second toss: Computer wins
+        ws.send_json({"type": TYPE_SELECT_TEAM, "team_id": "SA"})
+        toss_2 = ws.receive_json()
+        assert toss_2["type"] == TYPE_PRE_MATCH_STATE
+        # Computer chose BAT, so stage is BOWLER_SELECTION for user
+        assert toss_2["stage"] == "BOWLER_SELECTION"
+        assert toss_2["toss_winner"] == "computer"
+        assert toss_2["batting_first"] == "computer"
+        assert toss_2["bowling_first"] == "user"
+
 

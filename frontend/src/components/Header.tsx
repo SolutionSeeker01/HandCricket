@@ -12,41 +12,41 @@ export const Header: React.FC<HeaderProps> = ({ matchState, onOpenSettings }) =>
   const target = matchState?.target;
 
   return (
-    <header className="w-full flex items-center justify-between px-3 py-2 sm:px-6 sm:py-3 z-30">
+    <header className="w-full flex items-center justify-between px-2 py-1.5 sm:px-6 sm:py-3 z-30">
       {/* Branding */}
       <div className="flex flex-col text-left select-none">
         <div className="flex items-center space-x-1">
-          <span className="text-2xl sm:text-3xl font-black italic tracking-wider text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
+          <span className="text-xl sm:text-3xl font-black italic tracking-wider text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
             Hand
           </span>
-          <span className="text-2xl sm:text-3xl font-black italic tracking-wider text-amber-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
+          <span className="text-xl sm:text-3xl font-black italic tracking-wider text-amber-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
             Cricket
           </span>
-          <span className="inline-block w-2.5 h-2.5 rounded-full bg-red-600 border border-white -mt-3 shadow-sm" />
+          <span className="inline-block w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-red-600 border border-white -mt-2.5 sm:-mt-3 shadow-sm" />
         </div>
-        <span className="text-[11px] sm:text-xs text-white/90 font-medium tracking-wide drop-shadow">
+        <span className="hidden min-[380px]:block text-[11px] sm:text-xs text-white/90 font-medium tracking-wide drop-shadow">
           Small numbers. Big fun.
         </span>
       </div>
 
       {/* Central Over & Score Status Pills */}
-      <div className="flex items-center space-x-2 sm:space-x-3">
+      <div className="flex items-center space-x-1.5 sm:space-x-3">
         {/* Over Pill */}
-        <div className="flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-3 py-1 sm:px-4 sm:py-1.5 shadow-lg min-w-[65px] sm:min-w-[75px]">
-          <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-300">
+        <div className="flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-2 py-0.5 sm:px-4 sm:py-1.5 shadow-lg min-w-[55px] sm:min-w-[75px]">
+          <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-300">
             Over
           </span>
-          <span className="text-xs sm:text-sm font-black text-white tracking-wide">
+          <span className="text-[11px] sm:text-sm font-black text-white tracking-wide">
             {overs}
           </span>
         </div>
 
         {/* Score Pill */}
-        <div className="flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-3 py-1 sm:px-4 sm:py-1.5 shadow-lg min-w-[65px] sm:min-w-[75px]">
-          <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-300">
+        <div className="flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-2 py-0.5 sm:px-4 sm:py-1.5 shadow-lg min-w-[55px] sm:min-w-[75px]">
+          <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-300">
             Score
           </span>
-          <span className="text-xs sm:text-sm font-black text-amber-400 tracking-wide">
+          <span className="text-[11px] sm:text-sm font-black text-amber-400 tracking-wide">
             {score}
           </span>
         </div>

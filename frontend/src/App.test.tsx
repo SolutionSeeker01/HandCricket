@@ -1,11 +1,12 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, renderHook, act } from '@testing-library/react';
+import { render, screen, fireEvent, renderHook, act, within } from '@testing-library/react';
 import { Header } from './components/Header';
 import { PitchArena } from './components/PitchArena';
 import { Scoreboard } from './components/Scoreboard';
 import { InningsBreakModal } from './components/InningsBreakModal';
 import { MatchResultModal } from './components/MatchResultModal';
 import { LandingScreen } from './components/LandingScreen';
+import { IntroScreen } from './components/IntroScreen';
 import { TeamSelectionScreen } from './components/TeamSelectionScreen';
 import { TossScreen } from './components/TossScreen';
 import { BowlerPickerModal } from './components/BowlerPickerModal';
@@ -20,6 +21,7 @@ const mockMatchState: MatchState = {
   batting_team: 'India',
   bowling_team: 'Australia',
   user_is_batting: true,
+  user_batted_first: true,
   score: 27,
   wickets: 1,
   overs: '2.3',
@@ -388,10 +390,11 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(handleNext).toHaveBeenCalledTimes(1);
   });
 
-  it('MatchResultModal renders Win result and Play Again action', () => {
-    const winState: MatchState = {
+  it('MatchResultModal associates scores correctly when user bats first', () => {
+    const userBatsFirstState: MatchState = {
       ...mockMatchState,
       status: 'COMPLETED',
+      user_batted_first: true,
       winner: 'India',
       innings_1_score: 58,
       innings_1_wickets: 4,
@@ -400,32 +403,110 @@ describe('Slice 12 Frontend Component Tests', () => {
       result_description: 'India won by 6 runs.',
     };
     const handlePlayAgain = vi.fn();
-    render(<MatchResultModal matchState={winState} onPlayAgain={handlePlayAgain} />);
+    render(<MatchResultModal matchState={userBatsFirstState} onPlayAgain={handlePlayAgain} />);
 
     expect(screen.getByText('India Win!')).toBeDefined();
     expect(screen.getByText('India won by 6 runs.')).toBeDefined();
+
+    // Row 1: India (batted first) -> 58 / 4
+    const row1 = screen.getByTestId('innings-1-summary');
+    expect(within(row1).getByText('India')).toBeDefined();
+    expect(within(row1).getByText('58 / 4')).toBeDefined();
+
+    // Row 2: Australia (chased second) -> 52 / 5
+    const row2 = screen.getByTestId('innings-2-summary');
+    expect(within(row2).getByText('Australia')).toBeDefined();
+    expect(within(row2).getByText('52 / 5')).toBeDefined();
 
     const playBtn = screen.getByText('Play Again');
     fireEvent.click(playBtn);
     expect(handlePlayAgain).toHaveBeenCalledTimes(1);
   });
 
-  it('MatchResultModal renders Tie result', () => {
+  it('MatchResultModal associates scores correctly when computer bats first (primary fix)', () => {
+    // Computer won toss, chose to bat first
+    // Australia: 80/5 (innings 1)
+    // India: 81/3 (innings 2) -> India wins by 7 wickets
+    const computerBatsFirstState: MatchState = {
+      ...mockMatchState,
+      status: 'COMPLETED',
+      user_batted_first: false,
+      winner: 'India',
+      innings_1_score: 80,
+      innings_1_wickets: 5,
+      innings_2_score: 81,
+      innings_2_wickets: 3,
+      result_description: 'India won by 7 wickets.',
+    };
+    render(<MatchResultModal matchState={computerBatsFirstState} onPlayAgain={vi.fn()} />);
+
+    expect(screen.getByText('India Win!')).toBeDefined();
+    expect(screen.getByText('India won by 7 wickets.')).toBeDefined();
+
+    // Row 1 MUST be Australia (batted first) with 80 / 5, NOT India!
+    const row1 = screen.getByTestId('innings-1-summary');
+    expect(within(row1).getByText('Australia')).toBeDefined();
+    expect(within(row1).getByText('80 / 5')).toBeDefined();
+
+    // Row 2 MUST be India (batted second) with 81 / 3, NOT Australia!
+    const row2 = screen.getByTestId('innings-2-summary');
+    expect(within(row2).getByText('India')).toBeDefined();
+    expect(within(row2).getByText('81 / 3')).toBeDefined();
+  });
+
+  it('MatchResultModal associates scores correctly when computer bats first and computer wins', () => {
+    // Australia: 75/3 (innings 1)
+    // India: 60/5 (innings 2) -> Australia wins by 15 runs
+    const computerWinsBattingFirstState: MatchState = {
+      ...mockMatchState,
+      status: 'COMPLETED',
+      user_batted_first: false,
+      winner: 'Australia',
+      innings_1_score: 75,
+      innings_1_wickets: 3,
+      innings_2_score: 60,
+      innings_2_wickets: 5,
+      result_description: 'Australia won by 15 runs.',
+    };
+    render(<MatchResultModal matchState={computerWinsBattingFirstState} onPlayAgain={vi.fn()} />);
+
+    expect(screen.getByText('Australia Win!')).toBeDefined();
+    expect(screen.getByText('Australia won by 15 runs.')).toBeDefined();
+
+    const row1 = screen.getByTestId('innings-1-summary');
+    expect(within(row1).getByText('Australia')).toBeDefined();
+    expect(within(row1).getByText('75 / 3')).toBeDefined();
+
+    const row2 = screen.getByTestId('innings-2-summary');
+    expect(within(row2).getByText('India')).toBeDefined();
+    expect(within(row2).getByText('60 / 5')).toBeDefined();
+  });
+
+  it('MatchResultModal renders Tie result correctly when computer bats first', () => {
     const tieState: MatchState = {
       ...mockMatchState,
       status: 'COMPLETED',
+      user_batted_first: false,
       winner: null,
       is_tie: true,
       innings_1_score: 60,
       innings_1_wickets: 5,
       innings_2_score: 60,
       innings_2_wickets: 5,
-      result_description: 'Match tied.',
+      result_description: 'Match tied (60 - 60).',
     };
     render(<MatchResultModal matchState={tieState} onPlayAgain={vi.fn()} />);
 
     expect(screen.getByText("It's a Tie!")).toBeDefined();
-    expect(screen.getByText('Match tied.')).toBeDefined();
+    expect(screen.getByText('Match tied (60 - 60).')).toBeDefined();
+
+    const row1 = screen.getByTestId('innings-1-summary');
+    expect(within(row1).getByText('Australia')).toBeDefined();
+    expect(within(row1).getByText('60 / 5')).toBeDefined();
+
+    const row2 = screen.getByTestId('innings-2-summary');
+    expect(within(row2).getByText('India')).toBeDefined();
+    expect(within(row2).getByText('60 / 5')).toBeDefined();
   });
 });
 
@@ -658,6 +739,23 @@ describe('useCricketGame milestone detection', () => {
 });
 
 describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
+  it('IntroScreen renders WELCOME TO HAND CRICKET BY SRW and transitions on tap or timeout', () => {
+    vi.useFakeTimers();
+    const handleFinish = vi.fn();
+    render(<IntroScreen onFinish={handleFinish} durationMs={2000} />);
+
+    expect(screen.getByText(/WELCOME TO/i)).toBeDefined();
+    expect(screen.getByText('HAND CRICKET')).toBeDefined();
+    expect(screen.getByText(/BY SRW/i)).toBeDefined();
+
+    // Advance timer to trigger transition
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+    expect(handleFinish).toHaveBeenCalled();
+    vi.useRealTimers();
+  });
+
   it('LandingScreen renders Play vs Computer and disabled Play with Friend with COMING SOON badge', () => {
     const handlePlay = vi.fn();
     render(<LandingScreen onPlayVsComputer={handlePlay} />);
@@ -710,7 +808,8 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
     expect(handleBack).toHaveBeenCalledTimes(1);
   });
 
-  it('TossScreen displays user toss win with BAT and BOWL buttons', () => {
+  it('TossScreen displays both teams and coin flip, then reveals user toss win with BAT and BOWL buttons', () => {
+    vi.useFakeTimers();
     const handleChoice = vi.fn();
     render(
       <TossScreen
@@ -722,6 +821,18 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
       />
     );
 
+    // Initial state: Both teams are visible on sides
+    expect(screen.getByText('YOU')).toBeDefined();
+    expect(screen.getByText('INDIA')).toBeDefined();
+    expect(screen.getByText('COMPUTER')).toBeDefined();
+    expect(screen.getByText('AUSTRALIA')).toBeDefined();
+    expect(screen.getByText(/COIN IN THE AIR/i)).toBeDefined();
+
+    // Advance timers past 2.2s flip animation
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+
     expect(screen.getByText('YOU WON THE TOSS!')).toBeDefined();
     expect(screen.getByText('BAT FIRST')).toBeDefined();
     expect(screen.getByText('BOWL FIRST')).toBeDefined();
@@ -731,9 +842,11 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
 
     fireEvent.click(screen.getByText('BOWL FIRST'));
     expect(handleChoice).toHaveBeenCalledWith('BOWL');
+    vi.useRealTimers();
   });
 
-  it('TossScreen displays computer toss win and its decision', () => {
+  it('TossScreen displays computer toss win and its decision after coin flip completes', () => {
+    vi.useFakeTimers();
     render(
       <TossScreen
         userTeam={{ id: 'IND', name: 'India' }}
@@ -744,8 +857,14 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
       />
     );
 
+    // Advance past flip animation
+    act(() => {
+      vi.advanceTimersByTime(2600);
+    });
+
     expect(screen.getByText('COMPUTER WON THE TOSS')).toBeDefined();
     expect(screen.getByText(/BAT FIRST/i)).toBeDefined();
+    vi.useRealTimers();
   });
 
   it('BowlerPickerModal displays quota, eligible players, and disables used bowlers', () => {
@@ -793,5 +912,26 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
     expect(screen.getAllByText('England').length).toBeGreaterThan(0);
     expect(screen.getAllByText('South Africa').length).toBeGreaterThan(0);
   });
+
+  it('PitchArena renders OVER COMPLETE banner when over ends', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={{
+          type: 'NORMAL',
+          runs: 0,
+          title: 'OVER COMPLETE',
+          subtitle: 'Over finished',
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('OVER COMPLETE')).toBeDefined();
+    expect(screen.getByText(/Strike rotated • Preparing next over/i)).toBeDefined();
+  });
 });
+
 
