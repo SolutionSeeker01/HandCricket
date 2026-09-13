@@ -35,12 +35,12 @@
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | **COMPLETED (Awaiting Review)** |
 | **Slice 8** | Headless Computer Player (Bot) | Minimal headless ComputerPlayer generating legal 1–6 ball choices with injectable randomness | COMPLETED (Awaiting Review) |
 | **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI HTTP /health and basic WebSocket /ws transport smoke test | COMPLETED (Awaiting Review) |
-| **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5s server timer, timeout fallback, zero choice leakage | COMPLETED (Awaiting Review) |
-| **Slice 11** | EC2 Deployment of Walking Skeleton | Launch EC2 `t3.small`, Docker + Caddy SSL, verify public `wss://` on phone | NOT STARTED |
-| **Slice 12** | Minimal Playable Arena UI | Vite + React + Tailwind minimal arena (Scoreboard, Keypad, Bot Mode) | NOT STARTED |
+| **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5s server timer, timeout fallback, zero choice leakage | **APPROVED** |
+| **Slice 12** | Minimal Playable Arena UI | Vite + React + Tailwind minimal arena (Scoreboard, Keypad, Bot Mode) | **COMPLETED (Awaiting Review)** |
 | **Slice 13** | Pre-Match Flows | Landing, room lobby link sharing, team selection, toss, bowler modal | NOT STARTED |
 | **Slice 14** | Polish, Animations & Edge Cases | Coin flip animation, 5s countdown bar, ball reveal cards, auto-pick badge | NOT STARTED |
-| **Slice 15** | Friend Mode E2E Testing & Final Ship | End-to-end multi-device verification (phone + desktop), final sign-off | NOT STARTED |
+| **Slice 15** | Friend Mode Local & Multi-Device E2E | Local multi-window/device verification, turn coordination, final integration QA | NOT STARTED |
+| **Slice 16** | Production EC2 Deployment & Final Ship | Local Docker packaging validation, EC2 launch, Docker + Caddy SSL, public mobile phone WSS verification, final ship | NOT STARTED |
 
 ---
 
@@ -582,12 +582,80 @@
   * Enforced strict hidden choice guarantees: `number_submitted` strictly omits the player's number so unrevealed numbers are never sent to either client.
   * Used `asyncio.Lock` to guarantee that concurrent submission and timeout expiration cannot produce race conditions or double ball resolutions.
   * Preserved complete separation: `transport/websocket.py` depends on `protocol`, not directly on `engine`.
+### Slice 12: Minimal Playable Arena UI (Computer Mode)
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-13T13:35:00+05:30
+* **Goal**: Build the first genuinely playable frontend for Computer Mode connecting the existing backend game engine and WebSocket protocol to a polished, responsive React arena UI inspired by the design reference.
+* **Implementation Details**:
+  * **Backend Computer Mode Support**:
+    * Created `backend/app/protocol/game.py` (`ComputerGameSession`):
+      * Coordinates a complete two-innings match against `ComputerPlayer` using pure domain `Match`, `Team`, `resolve_ball()`, and Slice 10 messaging.
+      * Handles automatic rotation of bowlers according to the 1-over-per-bowler quota.
+      * Provides 5-second server-authoritative turn timer with random fallback if user times out.
+      * Emits `turn_started`, `number_submitted`, and `ball_result` messages enriched with authoritative `match_state`.
+      * Supports `submit_number`, `start_innings_2`, and `new_game` protocol messages.
+    * Updated `backend/app/transport/websocket.py`:
+      * Added `handle_computer_game_websocket` and standalone session management.
+      * Strictly maintained zero imports from `backend.app.engine.*`.
+    * Updated `backend/app/main.py`:
+      * Extended `/ws` endpoint with `mode=computer` query parameter routing directly to `handle_computer_game_websocket`.
+    * Added automated backend tests in `backend/tests/test_computer_game_protocol.py` (6 integration tests).
+  * **Frontend Arena UI**:
+    * Created `frontend/src/types.ts`: typed match state, player figures, bowler figures, and event feedback.
+    * Created `frontend/src/hooks/useCricketGame.ts`: custom hook managing WebSocket lifecycle, message dispatch, error recovery, and event feedback timeouts.
+    * Created `frontend/src/components/Header.tsx`: HandCricket branding, live Over pill, Score pill, Target pill (in Innings 2), and Settings button.
+    * Created `frontend/src/components/PitchArena.tsx`:
+      * Stadium atmosphere with dusk sky, floodlight beams, and outfield turf.
+      * Crisp SVG cricket pitch with perspective crease lines and 3 golden wickets with bails.
+      * Prompts: "Your Call!" and "Choose a number (1 – 6)".
+      * Six large, touch-friendly, circular 1–6 number buttons below pitch.
+      * Non-disruptive within-arena waiting indicator when choice is submitted (NO separate waiting screen).
+      * High-impact celebration overlays for FOUR (radiant blue 4), SIX (radiant golden 6), and WICKET (red impact banner + out player name).
+    * Created `frontend/src/components/Scoreboard.tsx`:
+      * Compact bottom scoreboard displaying User Team (India `IND`), Score/Wickets highlight pill (`27-1`), Striker (`Rohit * 16 (9)`), Non-Striker (`Virat 4 (5)`), Bowler figures (`Hazlewood 0.3 - 4 - 0`), Opponent Team (Australia `AUS`), and current over ball dots.
+      * Responsive design: stacks gracefully into a 2-tier card on narrow screens without horizontal overflow.
+    * Created `frontend/src/components/InningsBreakModal.tsx`: displays 1st innings score, overs, and target needed to win with a "Next Innings" button.
+    * Created `frontend/src/components/MatchResultModal.tsx`: renders WIN, LOSS, or TIE celebratory outcome with match summary and "Play Again" button.
+    * Created `frontend/src/components/SettingsModal.tsx`: scorecard summary, Hand Cricket rules recap, and restart match action.
+    * Updated `frontend/src/App.tsx`: orchestrates game states, connection states, and modal overlays.
+    * Added frontend tests in `frontend/src/App.test.tsx` (11 unit and interaction tests).
+* **Files Added / Modified**:
+  * `backend/app/protocol/game.py` (New)
+  * `backend/app/transport/websocket.py` (Modified)
+  * `backend/app/main.py` (Modified)
+  * `backend/tests/test_computer_game_protocol.py` (New — 6 tests)
+  * `frontend/src/types.ts` (New)
+  * `frontend/src/hooks/useCricketGame.ts` (New)
+  * `frontend/src/components/Header.tsx` (New)
+  * `frontend/src/components/PitchArena.tsx` (New)
+  * `frontend/src/components/Scoreboard.tsx` (New)
+  * `frontend/src/components/InningsBreakModal.tsx` (New)
+  * `frontend/src/components/MatchResultModal.tsx` (New)
+  * `frontend/src/components/SettingsModal.tsx` (New)
+  * `frontend/src/App.tsx` (Modified)
+  * `frontend/src/App.test.tsx` (New — 11 tests)
+  * `frontend/package.json` (Modified)
+  * `frontend/vite.config.ts` (Modified)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Backend Pytest: `python -m pytest backend/tests/ -v --tb=short` $\rightarrow$ PASS (461 passed in 3.66s, all 455 prior tests + 6 new tests).
+  * Frontend Vitest: `npm.cmd test` $\rightarrow$ PASS (11 passed in 3.67s).
+  * Frontend Build: `npm.cmd run build` $\rightarrow$ PASS (`tsc && vite build` built in 2.31s with zero errors).
+* **Decisions Made**:
+  * Preserved server authority: All ball resolution, batsman rotation, bowler quota, and match completion logic execute in Python backend; frontend is strictly an authoritative state renderer.
+  * Preserved Slice 10 WebSocket protocol: Reused `turn_started`, `submit_number`, `number_submitted`, and `ball_result` message schemas.
+  * Maintained strict separation: `transport/websocket.py` imports only from `protocol.game` and has zero direct imports from `engine`.
+  * Strictly adhered to waiting-state rule: No separate waiting screen was created; the user remains on the pitch arena with a subtle in-arena indicator.
+  * Real team names used from engine: Default match is India (`IND`) vs Australia (`AUS`) using actual rosters from `backend/app/engine/teams.py`.
 * **Explicitly Deferred Work**:
-  * Production EC2 deployment with Docker and Caddy (Slice 11).
-  * Minimal Playable Arena UI (Slice 12).
-  * Room creation, room codes, matchmaking, and lobby flows (Slice 13).
+  * Pre-match team/toss selection flows and bowler selection modal (Slice 13).
+  * Polish, coin toss animation, and 5s countdown visual bar (Slice 14).
+  * Friend Mode multi-window/device E2E verification (Slice 15).
+  * Production EC2 Deployment (Slice 16).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
 
 
 

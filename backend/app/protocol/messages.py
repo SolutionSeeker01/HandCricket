@@ -128,7 +128,16 @@ def parse_client_message(raw_text: str) -> Dict[str, Any]:
             f"Invalid choice {number}: choice must be between 1 and 6.",
         )
 
-    return {
+    res: Dict[str, Any] = {
         "type": TYPE_SUBMIT_NUMBER,
         "number": number,
     }
+    if "turn_id" in data:
+        turn_id = data["turn_id"]
+        if isinstance(turn_id, bool) or not isinstance(turn_id, int) or turn_id < 1:
+            raise TurnProtocolError(
+                "invalid_turn_id",
+                f"Invalid turn_id {turn_id!r}: must be a positive integer.",
+            )
+        res["turn_id"] = turn_id
+    return res
