@@ -35,7 +35,7 @@
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | **COMPLETED (Awaiting Review)** |
 | **Slice 8** | Headless Computer Player (Bot) | Minimal headless ComputerPlayer generating legal 1–6 ball choices with injectable randomness | COMPLETED (Awaiting Review) |
 | **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI HTTP /health and basic WebSocket /ws transport smoke test | COMPLETED (Awaiting Review) |
-| **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5-second countdown timer, auto-pick fallback | NOT STARTED |
+| **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5s server timer, timeout fallback, zero choice leakage | COMPLETED (Awaiting Review) |
 | **Slice 11** | EC2 Deployment of Walking Skeleton | Launch EC2 `t3.small`, Docker + Caddy SSL, verify public `wss://` on phone | NOT STARTED |
 | **Slice 12** | Minimal Playable Arena UI | Vite + React + Tailwind minimal arena (Scoreboard, Keypad, Bot Mode) | NOT STARTED |
 | **Slice 13** | Pre-Match Flows | Landing, room lobby link sharing, team selection, toss, bowler modal | NOT STARTED |
@@ -515,6 +515,80 @@
   * Minimal Playable Arena UI (Slice 12).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+---
+
+### Slice 10: WebSocket Game Protocol & 5-Second Turn Timer
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-13T12:25:00+05:30
+* **Goal**: Establish the server-authoritative WebSocket game protocol foundation representing a single two-participant simultaneous ball-turn interaction with a 5-second turn timer, timeout fallbacks via ComputerPlayer, race-condition protection, and strict hidden choice isolation.
+* **Implementation Details**:
+  * Created `backend/app/protocol/turn.py`:
+    * `TurnStatus` enum (`WAITING`, `ONE_SUBMITTED`, `COMPLETED`).
+    * `Turn` domain/protocol class:
+      * Manages state for one simultaneous ball turn between Participant A and Participant B.
+      * Enforces single submission per participant per turn.
+      * Validates number choices using `validate_choice()` from `backend.app.engine.ball`.
+      * Resolves ball outcomes strictly using `resolve_ball()` from `backend.app.engine.ball`.
+      * Handles timeout fallbacks via `ComputerPlayer` from `backend.app.engine.computer` for missing participants only, preserving any already submitted choice.
+      * Idempotent resolution: guarantees that a turn cannot be resolved twice.
+  * Created `backend/app/protocol/messages.py`:
+    * Formalized JSON protocol messages:
+      * `turn_started`: `{"type": "turn_started", "timeout_seconds": 5.0}`
+      * `submit_number`: `{"type": "submit_number", "number": 1..6}`
+      * `number_submitted`: `{"type": "number_submitted"}` (CRITICAL: choice number is strictly omitted from the payload).
+      * `ball_result`: `{"type": "ball_result", "batsman_choice": ..., "bowler_choice": ..., "runs": ..., "is_wicket": ..., "batting_participant": ..., "bowling_participant": ..., "choice_a": ..., "choice_b": ..., "a_timed_out": ..., "b_timed_out": ...}`
+      * `error`: `{"type": "error", "code": ..., "message": ...}`
+    * Parser & validator `parse_client_message`: catches malformed JSON, non-object JSON, missing types, unknown types, missing numbers, booleans, non-integers, and out-of-range numbers, mapping each to structured `TurnProtocolError`.
+  * Created `backend/app/protocol/session.py`:
+    * `TurnSession` coordinator:
+      * Manages connections for Participant A and B.
+      * Starts turn and broadcasts `turn_started` when both participants are connected.
+      * Implements 5-second server-authoritative timer via `asyncio.sleep()` and background task.
+      * Concurrency and race-condition safety guaranteed via `asyncio.Lock()`.
+      * Submission cancels timer task immediately when both choices arrive.
+      * Re-checks completion before applying timeout fallback.
+      * Provides deterministic `trigger_timeout()` method for instantaneous unit testing.
+      * Broadcasts messages without choice leakage.
+  * Updated `backend/app/transport/websocket.py`:
+    * Implemented `handle_turn_websocket(websocket, session, participant)` handling incoming messages, JSON validation, and structured error responses.
+    * Added standalone session helpers (`get_standalone_turn_session`, `reset_standalone_turn_session`).
+    * Retained `websocket_smoke_test()` for backward compatibility with Slice 9.
+    * Ensured transport module has ZERO direct imports from `backend.app.engine.*`.
+  * Updated `backend/app/main.py`:
+    * `/ws` endpoint routes to `handle_turn_websocket` when `participant` query param is present (e.g. `/ws?participant=A`), or to `websocket_smoke_test` when absent.
+  * Created automated tests:
+    * `backend/tests/test_turn_protocol.py` (37 tests): Covers Turn model lifecycle, validations, duplicate rejections, timeout fallbacks, race conditions, and message parsing/serialization.
+    * `backend/tests/test_websocket_protocol.py` (23 tests): Covers two-client WebSocket interactions, hidden choice verification, timeout fallbacks, race cancellation, message error reporting, participant security/authority boundaries, and clean disconnects.
+* **Files Added / Modified**:
+  * `backend/app/protocol/__init__.py` (New)
+  * `backend/app/protocol/turn.py` (New)
+  * `backend/app/protocol/messages.py` (New)
+  * `backend/app/protocol/session.py` (New)
+  * `backend/app/transport/websocket.py` (Modified)
+  * `backend/app/main.py` (Modified)
+  * `backend/tests/test_turn_protocol.py` (New — 41 tests)
+  * `backend/tests/test_websocket_protocol.py` (New — 28 tests)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Command: `python -m pytest backend/tests/ -v --tb=short` from repository root $\rightarrow$ PASS (455 passed in 3.30s).
+  * 3 sanity + 71 ball + 33 batting + 39 innings + 49 bowling + 48 match + 37 teams + 32 toss + 31 match setup + 36 computer + 7 websocket + 41 turn protocol + 28 websocket protocol = 455 tests total (69 new tests in Slice 10).
+* **Decisions & Hardening Fixes Made**:
+  * **Finding 1 (Participant Identity & Authority Boundary)**: Clarified that `/ws?participant=A` is a test/session harness context rather than authenticated identity. Verified and enforced that client payloads (e.g. `{"participant": "B"}`) cannot override or change server-bound participant identity.
+  * **Finding 2 (Duplicate Participant Connection Rejection)**: `TurnSession.register_connection` now explicitly checks if a participant already has an active connection and raises `TurnProtocolError('participant_already_connected')`, closing the duplicate with a structured error without corrupting the session. `unregister_connection` accepts the closing socket and only removes the registration if it matches the current authoritative connection, preventing rejected duplicates from disconnecting valid participants.
+  * **Finding 3 (Public Mutable Turn Encapsulation)**: Introduced `TurnView` in `backend/app/protocol/turn.py` and updated `TurnSession.turn` to return `self._turn.as_view()`, exposing only read-only query properties and strictly omitting state-mutating methods (`submit_choice`, `handle_timeout`, `resolve`).
+  * **Final Hardening (TurnView Private Name-Mangled Encapsulation)**: Further hardened `TurnView` encapsulation by storing the underlying mutable `Turn` in private name-mangled storage (`self.__turn`) and updated all internal accessors. Verified that `session.turn` returns `TurnView`, mutator methods (`submit_choice`, `handle_timeout`, `resolve`) are absent, and the attribute escape hatch `_turn` is completely inaccessible (`hasattr(session.turn, "_turn") is False`). All 12 query properties verified.
+  * Enforced strict hidden choice guarantees: `number_submitted` strictly omits the player's number so unrevealed numbers are never sent to either client.
+  * Used `asyncio.Lock` to guarantee that concurrent submission and timeout expiration cannot produce race conditions or double ball resolutions.
+  * Preserved complete separation: `transport/websocket.py` depends on `protocol`, not directly on `engine`.
+* **Explicitly Deferred Work**:
+  * Production EC2 deployment with Docker and Caddy (Slice 11).
+  * Minimal Playable Arena UI (Slice 12).
+  * Room creation, room codes, matchmaking, and lobby flows (Slice 13).
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
 
