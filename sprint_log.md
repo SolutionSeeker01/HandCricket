@@ -31,7 +31,7 @@
 | **Slice 3** | Batsman Lifecycle & Score Tracking | Runs, balls faced, status (`NOT_OUT`, `OUT`), batsman transition | **APPROVED** |
 | **Slice 4** | Over & Innings Progression | 6 balls/over, 5 overs max (30 legal balls), 10 wickets all-out limit | **COMPLETED (Awaiting Review)** |
 | **Slice 5** | Bowler Quota Enforcement | 1 over max per bowler (requires 5 unique bowlers across 5 overs) | **COMPLETED (Awaiting Review)** |
-| **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | NOT STARTED |
+| **Slice 6** | Full Match & Target Chasing | Innings 1 sets target; Innings 2 chase with early finish termination | **COMPLETED (Awaiting Review)** |
 | **Slice 7** | Predefined Teams & Toss Mechanics | 4 teams & 11 players each, coin toss A/B, Bat/Bowl decision | NOT STARTED |
 | **Slice 8** | Headless Computer Player (Bot) | Bot choosing 1–6 and picking bowlers; 100-match automated Bot vs Bot simulation | NOT STARTED |
 | **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI app, `/health`, room generation (`POST /api/rooms`), WebSocket connection | NOT STARTED |
@@ -295,6 +295,85 @@
   * Turn timers, WebSockets, and UI integration (Slices 9–15).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+### Slice 6: Full Match & Target Chasing
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-13T11:17:00+05:30
+* **What was implemented**:
+  * Created pure domain engine module `backend/app/engine/match.py`:
+    * Domain exceptions: `MatchError`, `MatchLifecycleError`, `InningsTransitionError`, `BowlerSelectionError`.
+    * Lifecycle state machine: `MatchStatus(Enum)` with states `NOT_STARTED` $\rightarrow$ `INNINGS_1` $\rightarrow$ `INNINGS_2` $\rightarrow$ `COMPLETED`.
+    * Composes `Innings` and `BowlingState` domain engines without duplicating any underlying scoring, dismissal, or quota logic.
+    * Two-innings match orchestration:
+      * Innings 1: Batting progression with per-over bowler assignment and quota tracking.
+      * Innings 1 completion sets Innings 2 target strictly to `target = innings_1_score + 1`.
+      * Guarded transition: `start_innings_2()` only permitted after Innings 1 is completed (30 balls or 10 wickets all-out).
+      * Innings 2: Initialized with independent fresh `Innings` and `BowlingState` instances.
+      * Target chasing: Evaluated after each ball in Innings 2. If `innings_2_score >= target`, match terminates immediately on that exact ball without playing remaining balls.
+      * Match outcome determination: Distinguishes chasing victory (Team 2 wins by wickets), defending victory (Team 1 wins by runs), and Tie (equal scores on all-out or 30 balls).
+    * Bowler coordination:
+      * Enforces that each over requires selecting an eligible bowler via `select_bowler(bowler_id)` before balls can be processed.
+      * Coordinates over completion between `Innings.over_complete` and `BowlingState.complete_over()`.
+      * Enforces that bowler cannot be reused in the same innings (`BowlerAlreadyBowledError`).
+    * Encapsulation and read-only views:
+      * Created `InningsView` wrapper exposing inspection properties while strictly omitting `record_ball()` to prevent mutation bypass.
+      * Created `MatchView` wrapper exposing match status, scores, and views while omitting all mutators.
+      * Exposed `as_view()` method returning `MatchView`.
+  * Created automated test suite `backend/tests/test_match_engine.py` (44 tests):
+    * Initial state verification (A)
+    * Valid match start (B)
+    * Invalid lifecycle operations (C)
+    * Complete Innings 1 (D)
+    * Correct Innings 1 score (E)
+    * Correct target calculation (F)
+    * Rejection of starting Innings 2 prematurely (G)
+    * Independent fresh state in Innings 2 (H)
+    * Bowler selection required before ball (I)
+    * Ball processing delegation (J)
+    * Over transition requiring new bowler (K)
+    * Used bowler rejection (L)
+    * 5 unique bowlers completing 5 overs (M)
+    * 6th over rejection (N)
+    * Innings 1 all-out completion (O)
+    * Innings 1 30-ball completion (P)
+    * Target chase immediate termination (Q)
+    * Rejection of balls after target reached (R)
+    * Innings 2 ending by 30 balls under target (S)
+    * Innings 2 ending by all-out under target (T)
+    * Correct winner when defending (U)
+    * Correct winner when chasing (V)
+    * Tie behavior on equal scores (W)
+    * Rejection of operations after match completed (X)
+    * Match result exposition (Y)
+    * Read-only state views and mutation protection (Z)
+    * Edge cases: target=1, final ball target, wicket on final ball, over boundary target, custom configurations (e.g. 3 players / 2 overs).
+* **Hardening (Audit Finding F1 Fix)**:
+  * Resolved audit issue F1: `BowlingState` remaining active after innings completes by all-out mid-over.
+  * Added `end_innings()` method to `BowlingState` (`bowling.py`) that cleanly clears `_active_bowler` and marks the bowling innings ended without incrementing `_completed_overs` for partial overs.
+  * Coordinated `Match._record_ball_innings_1` and `Match._record_ball_innings_2` to call `end_innings()` whenever an innings or match completes.
+  * Added tests covering premature/terminal innings deactivation in `test_bowling_engine.py` (3 tests) and `test_match_engine.py` (4 tests).
+  * Test count: 243 passed in 2.18s (49 bowling tests + 48 match tests).
+* **Files Added / Modified**:
+  * `backend/app/engine/bowling.py` (Modified — added `end_innings()` and terminal deactivation)
+  * `backend/app/engine/match.py` (New / Modified — coordinates `end_innings()`)
+  * `backend/tests/test_bowling_engine.py` (Modified — added 3 `end_innings` tests)
+  * `backend/tests/test_match_engine.py` (New / Modified — added 4 terminal deactivation tests)
+  * `sprint_log.md` (Modified)
+* **Tests Executed**:
+  * Command: `pytest -v` from repository root $\rightarrow$ PASS (243 passed in 2.18s).
+  * 3 sanity tests + 71 ball tests + 33 batting tests + 39 innings tests + 49 bowling tests + 48 match tests = 243 tests total.
+* **Decisions Made**:
+  * Added `end_innings()` to `BowlingState` as an explicit domain method rather than mutating private state from `Match`.
+  * Preserved `completed_overs` as reflecting only fully completed overs (partial overs are not counted).
+  * Kept `BowlingStateView` strictly read-only by omitting `end_innings()`.
+* **Explicitly Deferred Work**:
+  * Predefined teams / toss mechanics (Slice 7).
+  * Computer player / bot decision making (Slice 8).
+  * Turn timers, WebSockets, and UI integration (Slices 9–15).
+* **Deviations from Plan**: None.
+* **Unresolved Issues**: None.
+
 
 
 

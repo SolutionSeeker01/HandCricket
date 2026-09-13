@@ -81,6 +81,7 @@ class BowlingState:
         self._active_bowler: Optional[int] = None
         self._used_bowlers: List[int] = []
         self._over_bowlers: Dict[int, int] = {}
+        self._is_ended: bool = False
 
     @property
     def team_size(self) -> int:
@@ -202,6 +203,11 @@ class BowlingState:
                 f"Cannot select bowler: all {self._max_overs} overs have already been completed."
             )
 
+        if self._is_ended:
+            raise BowlingLifecycleError(
+                "Cannot select bowler: bowling innings has already ended."
+            )
+
         if self._active_bowler is not None:
             raise BowlingLifecycleError(
                 f"Cannot select bowler: Over {self.current_over} is already in progress with bowler "
@@ -235,6 +241,18 @@ class BowlingState:
 
         self._active_bowler = None
         self._completed_overs += 1
+        if self._completed_overs == self._max_overs:
+            self._is_ended = True
+
+    def end_innings(self) -> None:
+        """Mark the bowling innings as finished and deactivate any active bowler.
+
+        Clears the active bowler without incrementing completed_overs, reflecting
+        that an incomplete over was terminated because the innings ended (e.g. all-out).
+        Safe to call if no over is active or if all overs are already completed.
+        """
+        self._active_bowler = None
+        self._is_ended = True
 
     def as_view(self) -> "BowlingStateView":
         """Return a read-only query view of this bowling state."""
@@ -252,7 +270,7 @@ class BowlingStateView:
     """Read-only query view over a BowlingState instance.
 
     Exposes query properties and helper inspection methods while strictly omitting
-    mutator methods (`select_bowler`, `complete_over`) to prevent state corruption.
+    mutator methods (`select_bowler`, `complete_over`, `end_innings`) to prevent state corruption.
     """
 
     def __init__(self, state: BowlingState) -> None:

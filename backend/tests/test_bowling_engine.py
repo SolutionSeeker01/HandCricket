@@ -328,15 +328,19 @@ def test_bowling_state_view_read_only_protection():
     assert view.has_bowled(4) is True
     assert view.bowler_for_over(1) == 4
 
-    # View has NO select_bowler or complete_over methods
+    # View has NO select_bowler, complete_over, or end_innings methods
     assert not hasattr(view, "select_bowler")
     assert not hasattr(view, "complete_over")
+    assert not hasattr(view, "end_innings")
 
     with pytest.raises(AttributeError):
         view.select_bowler(2)  # type: ignore
 
     with pytest.raises(AttributeError):
         view.complete_over()  # type: ignore
+
+    with pytest.raises(AttributeError):
+        view.end_innings()  # type: ignore
 
 
 # ---------------------------------------------------------------------------
@@ -372,3 +376,47 @@ def test_repr_representation():
     view_repr = repr(state.as_view())
     assert "BowlingStateView" in view_repr
     assert "active_bowler=3" in view_repr
+
+
+# ---------------------------------------------------------------------------
+# 10. Premature / Terminal Innings Deactivation (end_innings)
+# ---------------------------------------------------------------------------
+
+
+def test_end_innings_clears_active_bowler_without_incrementing_completed_overs():
+    """Calling end_innings deactivates the bowler without counting a partial over."""
+    state = BowlingState()
+    state.select_bowler(4)
+
+    assert state.is_over_active is True
+    assert state.active_bowler == 4
+    assert state.completed_overs == 0
+
+    state.end_innings()
+
+    assert state.active_bowler is None
+    assert state.current_bowler is None
+    assert state.is_over_active is False
+    assert state.completed_overs == 0  # Partial over is NOT completed
+    assert state.has_bowled(4) is True  # Bowler remains used
+    assert state.is_eligible(4) is False
+
+
+def test_end_innings_when_no_active_over_is_safe_noop():
+    """Calling end_innings when no over is active is a safe, idempotent operation."""
+    state = BowlingState()
+    state.end_innings()
+
+    assert state.active_bowler is None
+    assert state.is_over_active is False
+    assert state.completed_overs == 0
+
+
+def test_cannot_select_bowler_after_end_innings():
+    """Selecting a bowler after end_innings raises BowlingLifecycleError."""
+    state = BowlingState()
+    state.select_bowler(1)
+    state.end_innings()
+
+    with pytest.raises(BowlingLifecycleError, match="bowling innings has already ended"):
+        state.select_bowler(2)
