@@ -835,8 +835,8 @@ class ComputerGameSession:
         # Check over completion
         if active_innings and active_innings.over_complete:
             self._current_over_balls = []
-            # Rotate bowler if innings is not complete
-            if not active_innings.is_completed:
+            # Rotate bowler if neither innings nor match is complete
+            if not active_innings.is_completed and not self._match.is_completed:
                 active_bowling = (
                     self._match.bowling_1 if innings_num == 1 else self._match.bowling_2
                 )

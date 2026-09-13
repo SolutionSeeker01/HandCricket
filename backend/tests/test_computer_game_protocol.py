@@ -4,6 +4,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.engine.computer import ComputerPlayer
+from backend.app.engine.toss import Participant
 from backend.app.main import app
 from backend.app.protocol.game import ComputerGameSession
 from backend.app.protocol.messages import TurnProtocolError
@@ -444,5 +445,280 @@ def test_computer_mode_timeout_fallback_resolves_ball():
         assert session._last_ball_info["user_timed_out"] is True
 
     asyncio.run(_run())
+
+
+def test_chase_target_reached_on_sixth_ball_of_over_concludes_match_without_bowler_error():
+    """Regression test for late-chase bug: Target reached on ball 6 of an over must conclude match without error.
+    
+    Exact user scenario:
+    - Innings 2, user batting (IND), computer bowling (ENG).
+    - Target: 95.
+    - At Over 2.5, score is 90/1.
+    - Ball 6 of Over 3 (Ball 18): user scores 6 (total: 96 >= 95).
+    - Ball 6 completes the over (over_complete == True).
+    - Must NOT raise MatchLifecycleError when trying to rotate bowler on completed match.
+    - Must send ball_result with status COMPLETED and winner India.
+    """
+    class DummyWS:
+        def __init__(self):
+            self.messages = []
+        async def send_json(self, msg):
+            self.messages.append(msg)
+
+    async def _run():
+        session = ComputerGameSession(
+            user_team_id="IND",
+            opponent_team_id="ENG",
+            skip_pre_match=False,
+            timeout_seconds=0.0,
+            toss_chooser=lambda: Participant.A,
+        )
+        ws = DummyWS()
+        await session.register_connection(ws)
+
+        # Pre-match: user chooses BOWL so ENG bats first
+        await session.select_team("IND")
+        if session.stage == "TOSS_DECISION":
+            await session.choose_toss("BOWL")
+        if session.stage == "BOWLER_SELECTION":
+            await session.select_bowler(11)
+
+        # Innings 1: Fast-forward 30 balls where ENG scores exactly 94 runs (Target = 95)
+        # 10 fours (40) + 10 threes (30) + 1 six (6) + 9 twos (18) = 94 runs
+        # User always bowls 1, so no wickets fall since computer never picks 1
+        choices_innings_1 = [4]*10 + [3]*10 + [6]*1 + [2]*9
+        session._bot = ComputerPlayer(chooser=lambda: choices_innings_1.pop(0) if choices_innings_1 else 2)
+        for over in range(1, 6):
+            if session._awaiting_bowler_selection:
+                await session.select_bowler(session.match.bowling_1.eligible_bowlers[0])
+            for _ in range(6):
+                if session.is_innings_break:
+                    break
+                await session.submit_number(1)
+
+        assert session.match.innings_1.total_runs == 94
+        assert session.match.target == 95
+
+        # Start Innings 2: User batting
+        await session.start_next_innings()
+
+        # Over 1: 36 runs (6 sixes)
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        for _ in range(6):
+            await session.submit_number(6)
+
+        # Over 2: 24 runs + 1 wicket (6, 6, 6, 4, 2, and wicket on ball 6) -> 60/1 in 2.0 overs
+        await session.submit_number(6)
+        await session.submit_number(6)
+        await session.submit_number(6)
+        await session.submit_number(4)
+        await session.submit_number(2)
+        session._bot = ComputerPlayer(chooser=lambda: 3)
+        await session.submit_number(3) # Wicket!
+
+        # Over 3: 5 balls of 6 = 30 runs -> 90/1 in 2.5 overs!
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        for _ in range(5):
+            await session.submit_number(6)
+
+        assert session.match.innings_2.total_runs == 90
+        assert session.match.innings_2.wickets == 1
+        assert session.match.innings_2.current_over == 3
+        assert session.match.innings_2.balls_in_current_over == 5
+
+        # BALL 6 OF OVER 3 (Ball 18): User submits 6 to reach target 95!
+        # This ball BOTH completes the over (over_complete == True) AND reaches the target!
+        await session.submit_number(6)
+
+        # Match must be COMPLETED, not crashed!
+        assert session.match.is_completed is True
+        assert session.match.winner == "India"
+        assert session.match.status.value == "COMPLETED"
+
+        # Verify WebSocket received ball_result with COMPLETED status
+        last_ball_msg = [m for m in ws.messages if m.get("type") == "ball_result"][-1]
+        assert last_ball_msg["match_state"]["status"] == "COMPLETED"
+        assert last_ball_msg["match_state"]["winner"] == "India"
+        assert last_ball_msg["match_state"]["score"] == 96
+        assert last_ball_msg["match_state"]["overs"] == "3.0"
+
+        # Verify turn did NOT restart on completed match
+        assert session.is_turn_active is False
+        assert session._awaiting_bowler_selection is False
+
+    asyncio.run(_run())
+
+
+def test_chase_target_reached_before_over_end_concludes_match():
+    """Boundary variant: Target reached on ball 3 of an over concludes match cleanly."""
+    async def _run():
+        session = ComputerGameSession(
+            user_team_id="IND",
+            opponent_team_id="ENG",
+            skip_pre_match=False,
+            timeout_seconds=0.0,
+            toss_chooser=lambda: Participant.A,
+        )
+        await session.select_team("IND")
+        await session.choose_toss("BOWL")
+        await session.select_bowler(11)
+
+        # Innings 1: 6 balls of 2 = 12 runs in Over 1
+        session._bot = ComputerPlayer(chooser=lambda: 2)
+        for _ in range(6):
+            await session.submit_number(1)
+
+        # Over 2 starts: select bowler
+        if session._awaiting_bowler_selection:
+            await session.select_bowler(session.match.bowling_1.eligible_bowlers[0])
+
+        # 10 wickets in Over 2 (comp 1, user 1)
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        for _ in range(10):
+            if session.is_innings_break:
+                break
+            if session._awaiting_bowler_selection:
+                await session.select_bowler(session.match.bowling_1.eligible_bowlers[0])
+            await session.submit_number(1)
+
+        assert session.is_innings_break is True
+        assert session.match.target == 13
+
+        # Innings 2: User batting
+        await session.start_next_innings()
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        # Ball 1: 6 runs
+        await session.submit_number(6)
+        # Ball 2: 6 runs (Total 12)
+        await session.submit_number(6)
+        assert session.match.is_completed is False
+        assert session.match.innings_2.balls_in_current_over == 2
+
+        # Ball 3: 4 runs (Total 16 >= 13) - Target reached BEFORE over ends!
+        await session.submit_number(4)
+        assert session.match.is_completed is True
+        assert session.match.winner == "India"
+        assert session.is_turn_active is False
+
+    asyncio.run(_run())
+
+
+def test_chase_target_not_reached_on_sixth_ball_rotates_bowler_normally():
+    """Boundary variant: Target not reached on ball 6 rotates bowler and starts next turn."""
+    async def _run():
+        session = ComputerGameSession(
+            user_team_id="IND",
+            opponent_team_id="ENG",
+            skip_pre_match=False,
+            timeout_seconds=0.0,
+            toss_chooser=lambda: Participant.A,
+        )
+        await session.select_team("IND")
+        await session.choose_toss("BOWL")
+        await session.select_bowler(11)
+
+        # Innings 1: 30 balls of 2 = 60 runs (Target 61)
+        session._bot = ComputerPlayer(chooser=lambda: 2)
+        for over in range(1, 6):
+            if session._awaiting_bowler_selection:
+                await session.select_bowler(session.match.bowling_1.eligible_bowlers[0])
+            for _ in range(6):
+                if session.is_innings_break:
+                    break
+                await session.submit_number(1)
+
+        assert session.match.target == 61
+        await session.start_next_innings()
+
+        # Innings 2: Over 1 (balls 1 to 5): 5 runs each (Total 25 < 61)
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        for _ in range(5):
+            await session.submit_number(5)
+
+        assert session.match.innings_2.balls_in_current_over == 5
+        first_bowler = session._last_bowler_id
+
+        # Ball 6: 4 runs (Total 29 < 61). Over completes, target NOT reached!
+        await session.submit_number(4)
+
+        assert session.match.is_completed is False
+        assert session.match.innings_2.current_over == 2
+        assert session.match.innings_2.balls_in_current_over == 0
+        # Computer rotated bowler
+        assert session._last_bowler_id != first_bowler
+        # Next turn started
+        assert session.is_turn_active is True
+
+    asyncio.run(_run())
+
+
+def test_chase_computer_batting_reaches_target_on_sixth_ball_no_bowler_prompt():
+    """Boundary variant: Computer batting reaches target on ball 6, user is NOT prompted for bowler."""
+    class DummyWS:
+        def __init__(self):
+            self.messages = []
+        async def send_json(self, msg):
+            self.messages.append(msg)
+
+    async def _run():
+        session = ComputerGameSession(
+            user_team_id="IND",
+            opponent_team_id="AUS",
+            skip_pre_match=False,
+            timeout_seconds=0.0,
+            toss_chooser=lambda: Participant.A,
+            computer_team_chooser=lambda: "AUS",
+        )
+        ws = DummyWS()
+        await session.register_connection(ws)
+
+        # User bats first, sets small target (10 runs, target 11)
+        await session.select_team("IND")
+        assert session.stage == "TOSS_DECISION"
+        await session.choose_toss("BAT")
+
+        # Innings 1: User scores 10 runs then gets out
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        await session.submit_number(6) # 6
+        await session.submit_number(4) # 10
+        session._bot = ComputerPlayer(chooser=lambda: 2)
+        # 10 wickets to end innings
+        for _ in range(10):
+            if session.is_innings_break:
+                break
+            await session.submit_number(2)
+
+        assert session.match.target == 11
+        await session.start_next_innings()
+
+        # Innings 2: Computer is batting, User is bowling
+        # Need user to select first bowler for Over 1
+        assert session._awaiting_bowler_selection is True
+        await session.select_bowler(11)
+
+        # 5 balls of 1 run (comp 1, user 2) -> Total 5 runs in 5 balls
+        session._bot = ComputerPlayer(chooser=lambda: 1)
+        for _ in range(5):
+            await session.submit_number(2)
+
+        assert session.match.innings_2.balls_in_current_over == 5
+        assert session.match.innings_2.total_runs == 5
+
+        # Ball 6: Computer hits 6! (comp 6, user 2) -> Total 11 >= 11 (TARGET REACHED on ball 6!)
+        session._bot = ComputerPlayer(chooser=lambda: 6)
+        await session.submit_number(2)
+
+        # Match must be completed, winner Australia
+        assert session.match.is_completed is True
+        assert session.match.winner == "Australia"
+
+        # User MUST NOT be prompted for bowler selection on completed match!
+        assert session._awaiting_bowler_selection is False
+        bowler_req_msgs = [m for m in ws.messages if m.get("type") == "bowler_selection_required"]
+        # Only the initial Over 1 prompt, none after target reached
+        assert len(bowler_req_msgs) == 1
+
+    asyncio.run(_run())
+
 
 

@@ -369,6 +369,7 @@ export function useCricketGame() {
           }
         } else if (data.type === 'error') {
           setErrorMessage(data.message || 'An unexpected error occurred.');
+          setSelectedNumber(null);
           setIsWaiting(false);
           stopCountdown();
         }
