@@ -21,6 +21,9 @@ export default function App() {
     bowlerSelectionPrompt,
     matchState,
     connectionStatus,
+    turnCountdown,
+    isMuted,
+    toggleMute,
     selectedNumber,
     isWaiting,
     eventFeedback,
@@ -129,8 +132,24 @@ export default function App() {
       {/* Soft atmospheric overlay for readability */}
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-transparent to-slate-950/50 pointer-events-none z-0" />
 
+      {/* Reconnection Status Banner (non-destructive) */}
+      {connectionStatus === 'reconnecting' && (
+        <div
+          data-testid="reconnection-banner"
+          className="absolute top-2 z-50 px-4 py-1.5 rounded-full bg-amber-500/95 text-slate-950 font-black text-xs sm:text-sm shadow-xl flex items-center space-x-2 backdrop-blur-md animate-in slide-in-from-top duration-200 border border-amber-300"
+        >
+          <span className="w-2.5 h-2.5 rounded-full bg-slate-950 animate-ping inline-block" />
+          <span>Connection lost — Reconnecting to match...</span>
+        </div>
+      )}
+
       {/* Top Header */}
-      <Header matchState={matchState} onOpenSettings={() => setShowSettings(true)} />
+      <Header
+        matchState={matchState}
+        onOpenSettings={() => setShowSettings(true)}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
+      />
 
       {/* Main Pitch Arena (Prompts, pitch, 1-6 buttons, event celebrations, milestones) */}
       <PitchArena
@@ -139,6 +158,7 @@ export default function App() {
         isWaiting={isWaiting}
         eventFeedback={eventFeedback}
         milestoneFeedback={milestoneFeedback}
+        turnCountdown={turnCountdown}
         onSelectNumber={submitNumber}
       />
 
@@ -180,6 +200,8 @@ export default function App() {
         matchState={matchState}
         onClose={() => setShowSettings(false)}
         onResetMatch={resetGame}
+        isMuted={isMuted}
+        onToggleMute={toggleMute}
       />
     </div>
   );

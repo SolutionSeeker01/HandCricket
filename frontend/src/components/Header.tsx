@@ -4,9 +4,16 @@ import { MatchState } from '../types';
 interface HeaderProps {
   matchState: MatchState | null;
   onOpenSettings: () => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ matchState, onOpenSettings }) => {
+export const Header: React.FC<HeaderProps> = ({
+  matchState,
+  onOpenSettings,
+  isMuted = false,
+  onToggleMute,
+}) => {
   const overs = matchState ? `${matchState.overs} / ${matchState.max_overs}` : '0.0 / 5';
   const score = matchState ? `${matchState.score} / ${matchState.wickets}` : '0 / 0';
   const target = matchState?.target;
@@ -77,6 +84,32 @@ export const Header: React.FC<HeaderProps> = ({ matchState, onOpenSettings }) =>
           </svg>
           <span>vs Computer</span>
         </div>
+
+        {/* Audio Mute/Unmute Toggle Button */}
+        {onToggleMute && (
+          <button
+            onClick={onToggleMute}
+            data-testid="header-audio-toggle"
+            className={`p-2 sm:p-2.5 backdrop-blur-md rounded-2xl border shadow-lg transition-all active:scale-95 focus:outline-none ${
+              isMuted
+                ? 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 border-slate-700/60'
+                : 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40 shadow-amber-500/10'
+            }`}
+            title={isMuted ? 'Unmute Audio' : 'Mute Audio'}
+            aria-label={isMuted ? 'Unmute sound' : 'Mute sound'}
+          >
+            {isMuted ? (
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            )}
+          </button>
+        )}
 
         {/* Settings Button */}
         <button

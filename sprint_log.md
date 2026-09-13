@@ -36,11 +36,11 @@
 | **Slice 8** | Headless Computer Player (Bot) | Minimal headless ComputerPlayer generating legal 1–6 ball choices with injectable randomness | COMPLETED (Awaiting Review) |
 | **Slice 9** | Backend HTTP & WebSocket Foundation | FastAPI HTTP /health and basic WebSocket /ws transport smoke test | COMPLETED (Awaiting Review) |
 | **Slice 10** | WebSocket Game Protocol & 5s Turn Timer | Simultaneous blind inputs, 5s server timer, timeout fallback, zero choice leakage | **APPROVED** |
-| **Slice 12** | Minimal Playable Arena UI | Vite + React + Tailwind minimal arena (Scoreboard, Keypad, Bot Mode) | **COMPLETED (Awaiting Review)** |
-| **Slice 13** | Pre-Match Flows | Landing, room lobby link sharing, team selection, toss, bowler modal | NOT STARTED |
-| **Slice 14** | Polish, Animations & Edge Cases | Coin flip animation, 5s countdown bar, ball reveal cards, auto-pick badge | NOT STARTED |
-| **Slice 15** | Friend Mode Local & Multi-Device E2E | Local multi-window/device verification, turn coordination, final integration QA | NOT STARTED |
-| **Slice 16** | Production EC2 Deployment & Final Ship | Local Docker packaging validation, EC2 launch, Docker + Caddy SSL, public mobile phone WSS verification, final ship | NOT STARTED |
+| **Slice 12** | Minimal Playable Arena UI | Vite + React + Tailwind minimal arena (Scoreboard, Keypad, Bot Mode) | **APPROVED** |
+| **Slice 13** | Pre-Match Flows & Journey | Landing, team selection, toss animation, bowler modal, Computer Mode lifecycle | **COMPLETED / APPROVED** |
+| **Slice 14** | Polish, Animations & Edge Cases | Visual countdown bar, Web Audio API SFX, timeout auto-picked badge, celebration flair, reconnection UX | **COMPLETED (Awaiting Review)** |
+| **Slice 15** | Friend Mode Local & Multi-Device E2E | Local multi-window/device verification, turn coordination, final integration QA | NOT STARTED (Future Scope) |
+| **Slice 16** | Production EC2 Deployment & Final Ship | Local Docker packaging validation, EC2 launch, Docker + Caddy SSL, public mobile phone WSS verification, final ship | NOT STARTED (Future Scope) |
 
 ---
 
@@ -655,6 +655,175 @@
   * Production EC2 Deployment (Slice 16).
 * **Deviations from Plan**: None.
 * **Unresolved Issues**: None.
+
+---
+
+### Slice 13: Pre-Match Journey + Computer Mode
+
+* **Status**: COMPLETED
+* **Timestamp**: 2026-09-13T18:30:00+05:30
+* **Goal**: Add the complete pre-match journey leading into the approved playable arena for Computer Mode, integrating team selection, server-authoritative toss, bowler selection, and full match lifecycle without redesigning the approved arena.
+* **What was delivered**:
+  * **Computer Mode Pre-Match Lifecycle**:
+    * Full flow: Landing Screen $\rightarrow$ Team Selection $\rightarrow$ Authoritative Toss $\rightarrow$ Toss Decision $\rightarrow$ Bowler Selection $\rightarrow$ Playable Match Arena.
+    * Server-authoritative pre-match protocol coordinator (`ComputerGameSession`) managing stages: `TEAM_SELECTION` $\rightarrow$ `TOSS_DECISION` $\rightarrow$ `BOWLER_SELECTION` $\rightarrow$ `IN_MATCH`.
+  * **Predefined Teams**:
+    * 4 predefined international teams: India (`IND`), Australia (`AUS`), England (`ENG`), and South Africa (`SA`) with 11 players each from domain engine.
+    * Allows selection of any valid team (including identical team matchups like IND vs IND).
+  * **Server-Authoritative Coin Toss**:
+    * Server flips toss authoritatively; 3D coin toss animation presents the already-determined outcome.
+    * Toss decision: if User wins, user selects BAT or BOWL; if Computer wins, server chooses automatically.
+  * **Bowler Selection & Quota Enforcement**:
+    * First-bowler selection before Over 1 assigned according to toss outcome (user selects if bowling first; computer selects automatically if bowling first).
+    * Over-by-over bowler selection via modal (`BowlerPickerModal`) between overs when user is fielding.
+    * Bowler one-over quota strictly enforced (5 distinct bowlers across 5 overs; bowled bowlers become disabled).
+    * Computer automatic bowler selection picking from remaining eligible roster players.
+  * **Intro Screen & Visual Branding**:
+    * Clean cinematic intro screen with approved wording:
+      ```
+      WELCOME TO
+      HAND CRICKET
+      BY SRW
+      ```
+    * 3D animated coin toss sequence with dusk stadium backdrop.
+    * Integrated with the approved Slice 12 bright dusk pitch arena, circular 1–6 keypad, and scoreboard.
+  * **Scope Boundaries**:
+    * Computer Mode only. Multiplayer / Friend Mode / DB / user auth deliberately not implemented (future scope).
+* **Verification State for Original Slice 13**:
+  * Backend tests passed.
+  * Frontend tests passed.
+  * Production build passed.
+  * Browser / E2E verification passed.
+
+---
+
+### Slice 13 Refinement Pass
+
+* **Status**: COMPLETED / APPROVED
+* **Timestamp**: 2026-09-13T20:40:00+05:30
+* **Goal**: Refine correctness, state lifecycle, result sequencing, strike rotation, mobile hardening, and result modal presentation without redesigning the approved visual theme.
+* **What was implemented & refined**:
+  1. **Fresh Match Restart / Play Again Lifecycle**:
+     * Play Again (from `MatchResultModal`) starts fresh Team Selection.
+     * Restart Current Match (from `SettingsModal`) starts fresh Team Selection.
+     * Fresh server-side pre-match state initialized on `reset_game()`.
+     * Fresh authoritative toss generated on every game restart.
+     * Old match, bowler stats, over balls, and toss state completely cleared.
+     * Turn timer cancellation and reset before session re-initialization.
+     * Stale state protection preventing skipped toss animations or leaked scores.
+  2. **Sixth-Ball Result Sequencing**:
+     * Ball result remains visible for an intentional presentation period (~1.4 seconds) before transitioning.
+     * Delivery result strictly precedes bowler selection modal, innings break modal, or match result modal.
+     * Modal dialogs (`BowlerPickerModal`, `InningsBreakModal`, `MatchResultModal`) are guarded with `!eventFeedback` so celebration/wicket banners always finish before modals appear.
+  3. **Authoritative Over-End Strike Rotation**:
+     * Odd-run ball-level rotation remains active in `BattingState.record_ball()`.
+     * Over-end rotation now occurs on legal sixth ball completion in `Innings.record_ball()`.
+     * Even-run sixth ball $\rightarrow$ over-end swap (striker rotates to facing end for next over).
+     * Odd-run sixth ball $\rightarrow$ mid-ball crossing swap + over-end swap (net zero: batsman who ran odd runs remains facing).
+     * Sixth-ball wicket handled correctly: new batsman enters on strike, then over-end rotation swaps new batsman with non-striker.
+     * All-out protected: rotation skipped if either striker or non-striker is None.
+  4. **Bowler Quota / Transition Hardening**:
+     * Completed bowler becomes unavailable for remainder of innings.
+     * Eligible bowlers only presented for selection.
+     * User selection required via modal when user is fielding.
+     * Automatic computer selection from live eligible list when computer is fielding.
+  5. **Mobile Responsiveness**:
+     * Verified across viewports:
+       * 320×568
+       * 360×800
+       * 390×844
+       * 412×915
+       * 1366×768
+     * No horizontal overflow or content clipping in verification.
+     * Responsive circular 1–6 keypad maintains touch-friendly dimensions ($\ge 40\text{px}$) across all viewports.
+  6. **Result-Score Ownership Fix**:
+     * Added authoritative `user_batted_first: self._user_is_batting_first` to `get_match_state_dict()` and `MatchState` type.
+     * `MatchResultModal` now maps innings scores to the actual batting team:
+       * User bats first: Row 1 = User Team (`innings_1_score / innings_1_wickets`), Row 2 = Opponent Team (`innings_2_score / innings_2_wickets`).
+       * Computer bats first: Row 1 = Opponent Team (`innings_1_score / innings_1_wickets`), Row 2 = User Team (`innings_2_score / innings_2_wickets`).
+     * Verified all permutations: user wins batting first, user wins batting second, computer wins batting first, computer wins batting second, and tie.
+     * Regression tests added and verified.
+  7. **Minor Cleanup**:
+     * Removed duplicate unreachable completed-match branch in `register_connection()` (`backend/app/protocol/game.py`).
+     * Settings modal balls count derived dynamically from `{matchState.max_overs * 6} balls`.
+* **Verification**:
+  * Backend: **488 passed** (`pytest backend/tests/`).
+  * Frontend: **31 passed** (`npm.cmd test -- --run`).
+  * Production build: **Successful** (`npm.cmd run build` — TypeScript check and Vite build passed in 1.66s with zero errors).
+  * Refinement E2E / browser verification: **Passed**.
+  * No commit made during the refinement pass.
+
+---
+
+### Independent Review
+
+* **Second-Gate Reviewer**: **APPROVE WITH MINOR FINDINGS** initially.
+* **Findings & Resolution**:
+  * One real issue identified: `MatchResultModal` score inversion when computer bats first.
+  * That issue was fixed, verified, and regression-tested.
+  * Other findings (duplicate branch cleanup, dynamic ball count) were assessed as non-blocking and cleanly addressed.
+---
+
+### Slice 14: Polish, Animations, Audio & Edge Cases
+
+* **Status**: COMPLETED (Awaiting Review)
+* **Timestamp**: 2026-09-13T21:23:00+05:30
+* **What was implemented**:
+  1. **Zero-Dependency Web Audio Synthesis Engine** (`frontend/src/utils/sound.ts`):
+     * Implemented pure Web Audio API sound synthesizer `SoundManager`. Zero external MP3/WAV assets, zero 404/latency issues, fully compliant with browser autoplay policies.
+     * Generates wooden bat crack (`playBatHit(runs)`), crisp boundary crack + rising crowd cheer (`playFour()`), heavy explosive power smash + roaring crowd (`playSix()`), stump clatter + crowd gasp (`playWicket()`), coin toss chime (`playCoinToss()`), tactile UI tap (`playClick()`), and urgency countdown chime (`playTimerWarning()`).
+     * Master mute toggle with `localStorage` persistence and fallback safety in headless/test environments.
+  2. **Informative Visual Turn Countdown** (`frontend/src/components/PitchArena.tsx`, `frontend/src/hooks/useCricketGame.ts`):
+     * Compact countdown bar synchronized with server `turn_started` (`timeout_seconds = 10`).
+     * Purely informational client presentation: never claims submission authority or fires client-side timeouts.
+     * Smooth visual progression from 10s down to 0s:
+       * Calm emerald-to-amber progress track with `⏱️ {seconds}s remaining` badge when $>3$s.
+       * Urgency warning pulse with amber-to-red track, warning glow, and auditory tick when $\le 3$s.
+       * At 0s, clamps to `Waiting for delivery...` while server authoritative timer resolves.
+       * Stops immediately upon user button selection, delivery resolution, innings break, or disconnect.
+  3. **Authoritative Timeout & Auto-Pick Detection**:
+     * Server-authoritative `user_timed_out` flag preserved and passed through to frontend.
+     * Displays prominent glowing badge: `⏱️ TIMEOUT — AUTO-PICKED` in delivery outcome overlay.
+     * Works symmetrically whether user is batting or bowling while strictly preserving opponent secrecy.
+  4. **Keypad Micro-Interactions & Disabled States**:
+     * Circular keypad buttons maintain `aspect-square`, `rounded-full`, and $\ge 40\text{px}$ touch targets.
+     * Hover glow (`hover:shadow-[0_0_20px_rgba(59,130,246,0.5)]`), active scale-down (`active:scale-95`).
+     * Distinct disabled state (`cursor-not-allowed opacity-45 scale-95`) while awaiting delivery resolution.
+  5. **Enhanced Delivery Impact Celebrations**:
+     * FOUR: Radiant boundary halo blur on the pitch turf.
+     * SIX: Explosive radiant golden maximum aura.
+     * WICKET: Dramatic red ambient ping/shockwave pulse.
+     * Preserves strict 6th-ball sequencing (1400ms ball result $\rightarrow$ 1000ms OVER COMPLETE banner $\rightarrow$ bowler selection / innings break).
+  6. **Audio Controls in Header & Settings**:
+     * Header: Quick mute/unmute icon button next to Settings button.
+     * Settings Modal: Dedicated "Game Audio & SFX" card with sound description and toggle button.
+  7. **Non-Destructive Reconnection UX**:
+     * Exponential backoff retry logic on WebSocket connection drop.
+     * Non-destructive floating banner: `Connection lost — Reconnecting to match...` with animated pulse.
+     * Auto-recovers active match state on reconnect.
+* **Verification**:
+  * Backend Unit & Integration Tests: **488 passed** (`pytest backend/tests/`).
+  * Frontend Vitest Tests: **39 passed** (`npm.cmd test -- --run` in `frontend/`).
+  * Production Build: **Successful** (`npm.cmd run build` — TypeScript compile and Vite bundle generated in 2.27s with zero errors).
+  * Headless Chrome Browser Verification: Verified full pre-match journey, 10s timer timeout auto-pick, sound controls, celebrations, and all 5 target viewports:
+    * `320×568`
+    * `360×800`
+    * `390×844`
+    * `412×915`
+    * `1366×768`
+  * No git commit made (`git status` uncommitted for review).
+
+---
+
+## Current Project Status
+
+* **Slice 1–12**: Completed & Approved
+* **Slice 13**: Completed & Approved
+* **Slice 13 Refinement**: Completed & Approved
+* **Slice 14 (Polish, Animations, Audio & Edge Cases)**: Completed (Awaiting Review)
+* **Friend Mode (Slice 15)**: Future Scope
+* **Production EC2 Deployment (Slice 16)**: Future Scope
+
 
 
 

@@ -82,6 +82,19 @@ export interface MilestoneFeedback {
   label: 'FIFTY!' | 'CENTURY!';
 }
 
+export interface TurnCountdown {
+  remainingSeconds: number;
+  totalSeconds: number;
+  isUrgent: boolean;
+}
+
+export type ConnectionStatus =
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'disconnected'
+  | 'error';
+
 export type AppStage = 'INTRO' | 'LANDING' | 'PRE_MATCH' | 'IN_MATCH';
 
 export type PreMatchStage =

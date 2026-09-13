@@ -10,8 +10,10 @@ import { IntroScreen } from './components/IntroScreen';
 import { TeamSelectionScreen } from './components/TeamSelectionScreen';
 import { TossScreen } from './components/TossScreen';
 import { BowlerPickerModal } from './components/BowlerPickerModal';
+import { SettingsModal } from './components/SettingsModal';
 import { MatchState, TeamRoster } from './types';
 import { useCricketGame } from './hooks/useCricketGame';
+import { soundManager } from './utils/sound';
 
 const mockMatchState: MatchState = {
   status: 'INNINGS_1',
@@ -931,6 +933,381 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
 
     expect(screen.getByText('OVER COMPLETE')).toBeDefined();
     expect(screen.getByText(/Strike rotated • Preparing next over/i)).toBeDefined();
+  });
+});
+
+describe('Slice 14: Polish, Animations, Audio & Edge Cases', () => {
+  it('PitchArena renders visual countdown bar with remaining seconds when interactive', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        turnCountdown={{
+          remainingSeconds: 8,
+          totalSeconds: 10,
+          isUrgent: false,
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    const countdownBar = screen.getByTestId('turn-countdown-bar');
+    expect(countdownBar).toBeDefined();
+    expect(screen.getByText(/8s remaining/i)).toBeDefined();
+    expect(screen.getByText('8s')).toBeDefined();
+  });
+
+  it('PitchArena renders low-time urgency warning styling when isUrgent is true', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        turnCountdown={{
+          remainingSeconds: 2,
+          totalSeconds: 10,
+          isUrgent: true,
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    const countdownBar = screen.getByTestId('turn-countdown-bar');
+    expect(countdownBar).toBeDefined();
+    expect(screen.getByText(/2s remaining/i)).toBeDefined();
+    expect(screen.getByText('2s')).toBeDefined();
+  });
+
+  it('PitchArena shows "Waiting for delivery..." when remaining seconds reach 0 without client submit', () => {
+    const handleSelect = vi.fn();
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        turnCountdown={{
+          remainingSeconds: 0,
+          totalSeconds: 10,
+          isUrgent: true,
+        }}
+        onSelectNumber={handleSelect}
+      />
+    );
+
+    expect(screen.getByText(/Waiting for delivery.../i)).toBeDefined();
+    // Client-side selection is NOT triggered automatically:
+    expect(handleSelect).not.toHaveBeenCalled();
+  });
+
+  it('PitchArena renders styled TIMEOUT — AUTO-PICKED badge when userTimedOut is true', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={{
+          type: 'NORMAL',
+          runs: 2,
+          title: '+2 RUNS',
+          userChoice: 2,
+          computerChoice: 4,
+          userTimedOut: true,
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    const badge = screen.getByTestId('timeout-auto-picked-badge');
+    expect(badge).toBeDefined();
+    expect(badge.textContent).toContain('TIMEOUT — AUTO-PICKED');
+  });
+
+  it('PitchArena disables keypad buttons and sets opacity-45 while awaiting opponent', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={3}
+        isWaiting={true}
+        eventFeedback={null}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    const btn1 = screen.getByLabelText('Select 1') as HTMLButtonElement;
+    expect(btn1.disabled).toBe(true);
+    expect(btn1.className).toContain('cursor-not-allowed');
+    expect(btn1.className).toContain('opacity-45');
+  });
+
+  it('Header renders audio toggle button and invokes onToggleMute', () => {
+    const handleToggleMute = vi.fn();
+    render(
+      <Header
+        matchState={mockMatchState}
+        onOpenSettings={vi.fn()}
+        isMuted={false}
+        onToggleMute={handleToggleMute}
+      />
+    );
+
+    const audioBtn = screen.getByTestId('header-audio-toggle');
+    expect(audioBtn).toBeDefined();
+    expect(audioBtn.getAttribute('aria-label')).toBe('Mute sound');
+
+    fireEvent.click(audioBtn);
+    expect(handleToggleMute).toHaveBeenCalledTimes(1);
+  });
+
+  it('SettingsModal renders audio toggle card and calls onToggleMute', () => {
+    const handleToggleMute = vi.fn();
+    render(
+      <SettingsModal
+        isOpen={true}
+        matchState={mockMatchState}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+        isMuted={true}
+        onToggleMute={handleToggleMute}
+      />
+    );
+
+    expect(screen.getByText('Game Audio & SFX')).toBeDefined();
+    const toggleBtn = screen.getByTestId('settings-audio-toggle');
+    expect(toggleBtn.textContent).toContain('Sound: OFF');
+
+    fireEvent.click(toggleBtn);
+    expect(handleToggleMute).toHaveBeenCalledTimes(1);
+  });
+
+  it('soundManager toggles mute and safely executes audio calls in test environment', () => {
+    const initialMute = soundManager.isMuted();
+    const toggled = soundManager.toggleMute();
+    expect(toggled).toBe(!initialMute);
+    expect(soundManager.isMuted()).toBe(!initialMute);
+
+    // Call all audio methods to verify zero crashes / graceful no-op in tests
+    expect(() => {
+      soundManager.playClick();
+      soundManager.playCoinToss();
+      soundManager.playBatHit(2);
+      soundManager.playFour();
+      soundManager.playSix();
+      soundManager.playWicket();
+      soundManager.playTimerWarning();
+    }).not.toThrow();
+
+    // Restore mute state
+    soundManager.setMuted(initialMute);
+  });
+
+  it('resets reconnect retry budget on resetGame and resetPreMatch', () => {
+    vi.useFakeTimers();
+    let currentSocket: any;
+    const createMockSocket = () => {
+      const sock: any = {
+        readyState: 1, // OPEN
+        send: vi.fn(),
+        close: vi.fn(),
+        onopen: null,
+        onmessage: null,
+        onerror: null,
+        onclose: null,
+      };
+      currentSocket = sock;
+      return sock;
+    };
+
+    vi.stubGlobal('WebSocket', vi.fn().mockImplementation(createMockSocket));
+
+    const { result } = renderHook(() => useCricketGame());
+
+    // 1. Initial connect
+    act(() => {
+      currentSocket.onopen?.();
+    });
+    expect(result.current.connectionStatus).toBe('connected');
+
+    // 2. Simulate connection drops up to retry limit (4 attempts max)
+    // Attempt 1
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('reconnecting');
+    act(() => {
+      vi.advanceTimersByTime(1500); // delay 1200ms
+    });
+
+    // Attempt 2
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('reconnecting');
+    act(() => {
+      vi.advanceTimersByTime(2000); // delay 1800ms
+    });
+
+    // Attempt 3
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('reconnecting');
+    act(() => {
+      vi.advanceTimersByTime(3000); // delay 2700ms
+    });
+
+    // Attempt 4
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('reconnecting');
+    act(() => {
+      vi.advanceTimersByTime(4500); // delay 4000ms
+    });
+
+    // 3. Retry budget is now exhausted (reconnectAttemptRef === 4). Next drop must transition to disconnected
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('disconnected');
+
+    // Advancing timers should NOT trigger reconnect because budget is exhausted
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(result.current.connectionStatus).toBe('disconnected');
+
+    // 4. resetGame() must reset the retry budget
+    act(() => {
+      result.current.resetGame();
+    });
+    expect(result.current.connectionStatus).toBe('connecting');
+    act(() => {
+      currentSocket.onopen?.();
+    });
+    expect(result.current.connectionStatus).toBe('connected');
+
+    // 5. Verify that a subsequent drop gets the full retry budget again
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('reconnecting');
+
+    // 6. Exhaust retry budget again to test resetPreMatch()
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    act(() => {
+      currentSocket.onclose?.(); // attempt 2
+    });
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    act(() => {
+      currentSocket.onclose?.(); // attempt 3
+    });
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    act(() => {
+      currentSocket.onclose?.(); // attempt 4
+    });
+    act(() => {
+      vi.advanceTimersByTime(4500);
+    });
+    // Exhausted
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('disconnected');
+
+    // 7. resetPreMatch() must reset the retry budget
+    act(() => {
+      result.current.resetPreMatch();
+    });
+    expect(result.current.connectionStatus).toBe('connecting');
+    act(() => {
+      currentSocket.onopen?.();
+    });
+    expect(result.current.connectionStatus).toBe('connected');
+
+    // Drop connection: should reconnect (budget restored!)
+    act(() => {
+      currentSocket.onclose?.();
+    });
+    expect(result.current.connectionStatus).toBe('reconnecting');
+
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it('clears pending milestone timeout during component unmount', () => {
+    vi.useFakeTimers();
+    let mockSocket: any = {
+      readyState: 1,
+      send: vi.fn(),
+      close: vi.fn(),
+      onopen: null,
+      onmessage: null,
+      onerror: null,
+      onclose: null,
+    };
+    vi.stubGlobal('WebSocket', vi.fn().mockImplementation(() => mockSocket));
+
+    const clearTimeoutSpy = vi.spyOn(window, 'clearTimeout');
+
+    const { result, unmount } = renderHook(() => useCricketGame());
+
+    act(() => {
+      mockSocket.onopen?.();
+    });
+
+    // Striker scores 4 to reach 52 (crosses 50 milestone)
+    act(() => {
+      mockSocket.onmessage?.({
+        data: JSON.stringify({
+          type: 'ball_result',
+          match_state: {
+            ...mockMatchState,
+            striker: { id: 1, name: 'Rohit Sharma', runs: 52, balls: 21 },
+            non_striker: { id: 2, name: 'Virat Kohli', runs: 4, balls: 5 },
+            last_ball: {
+              batsman_choice: 4,
+              bowler_choice: 1,
+              runs: 4,
+              is_wicket: false,
+              user_choice: 4,
+              computer_choice: 1,
+              user_timed_out: false,
+              event: 'FOUR',
+              out_player: null,
+            },
+          },
+        }),
+      });
+    });
+
+    // Milestone is pending (1400ms delay)
+    expect(result.current.milestoneFeedback).toBeNull();
+    clearTimeoutSpy.mockClear();
+
+    // Unmount before milestone timeout fires
+    unmount();
+
+    // Verify clearTimeout was called during unmount cleanup
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+
+    // Advance time past 1400ms - ensure no timers throw or execute unexpectedly
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+
+    clearTimeoutSpy.mockRestore();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 });
 

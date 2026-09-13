@@ -1,5 +1,5 @@
 import React from 'react';
-import { EventFeedback, MatchState, MilestoneFeedback } from '../types';
+import { EventFeedback, MatchState, MilestoneFeedback, TurnCountdown } from '../types';
 
 interface PitchArenaProps {
   matchState: MatchState | null;
@@ -7,6 +7,7 @@ interface PitchArenaProps {
   isWaiting: boolean;
   eventFeedback: EventFeedback | null;
   milestoneFeedback?: MilestoneFeedback | null;
+  turnCountdown?: TurnCountdown | null;
   onSelectNumber: (num: number) => void;
 }
 
@@ -16,6 +17,7 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
   isWaiting,
   eventFeedback,
   milestoneFeedback,
+  turnCountdown,
   onSelectNumber,
 }) => {
   const userIsBatting = matchState ? matchState.user_is_batting : true;
@@ -57,7 +59,8 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
 
           {/* 2. FOUR BOUNDARY */}
           {eventFeedback.type === 'FOUR' && batterNumber !== null && (
-            <div className="flex flex-col items-center text-center animate-bounce">
+            <div className="relative flex flex-col items-center text-center animate-bounce">
+              <div className="absolute -inset-8 bg-amber-400/20 rounded-full blur-2xl -z-10 animate-pulse pointer-events-none" />
               <div className="text-8xl sm:text-9xl font-black text-amber-300 drop-shadow-[0_0_40px_rgba(251,191,36,0.85)] tracking-tight leading-none font-sans">
                 {batterNumber}
               </div>
@@ -69,7 +72,8 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
 
           {/* 3. SIX MAXIMUM */}
           {eventFeedback.type === 'SIX' && batterNumber !== null && (
-            <div className="flex flex-col items-center text-center animate-bounce">
+            <div className="relative flex flex-col items-center text-center animate-bounce">
+              <div className="absolute -inset-10 bg-yellow-400/25 rounded-full blur-3xl -z-10 animate-pulse pointer-events-none" />
               <div className="text-8xl sm:text-9xl font-black text-yellow-300 drop-shadow-[0_0_45px_rgba(234,179,8,0.9)] tracking-tight leading-none font-sans">
                 {batterNumber}
               </div>
@@ -81,8 +85,9 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
 
           {/* 4. WICKET (NO BATTER NUMBER DISPLAYED PER SPECIFICATION) */}
           {eventFeedback.type === 'WICKET' && (
-            <div className="flex flex-col items-center text-center">
-              <div className="px-8 sm:px-12 py-2 sm:py-3 rounded-full bg-red-600 text-white font-black text-3xl sm:text-5xl tracking-widest shadow-[0_6px_35px_rgba(220,38,38,0.75)] uppercase font-sans">
+            <div className="relative flex flex-col items-center text-center animate-in zoom-in-95 duration-150">
+              <div className="absolute -inset-10 bg-red-600/30 rounded-full blur-3xl -z-10 animate-ping pointer-events-none" />
+              <div className="px-8 sm:px-12 py-2 sm:py-3 rounded-full bg-red-600 text-white font-black text-3xl sm:text-5xl tracking-widest shadow-[0_6px_35px_rgba(220,38,38,0.75)] uppercase font-sans border-2 border-red-400/50">
                 WICKET!
               </div>
               {eventFeedback.subtitle && (
@@ -107,8 +112,12 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
 
           {/* Auto-Timeout indicator */}
           {eventFeedback.userTimedOut && (
-            <div className="mt-2 text-xs sm:text-sm text-amber-300 font-bold drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
-              ⏱️ Auto-picked on timeout
+            <div
+              data-testid="timeout-auto-picked-badge"
+              className="mt-3 inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-amber-500/20 border border-amber-400/80 text-amber-300 font-extrabold text-xs sm:text-sm tracking-wider uppercase drop-shadow-[0_0_12px_rgba(245,158,11,0.5)] animate-pulse"
+            >
+              <span>⏱️</span>
+              <span>TIMEOUT — AUTO-PICKED</span>
             </div>
           )}
         </div>
@@ -135,8 +144,54 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
         </div>
       )}
 
-      {/* 3. DYNAMIC DUAL-TONE HEADING WITH YELLOW BRUSH UNDERLINE */}
-      <div className="w-full flex flex-col items-center justify-center mb-3 sm:mb-4 z-10">
+      {/* 3. DYNAMIC DUAL-TONE HEADING WITH YELLOW BRUSH UNDERLINE & COUNTDOWN TIMER */}
+      <div className="w-full flex flex-col items-center justify-center mb-2 sm:mb-3 z-10">
+        {/* Compact Visual Countdown Bar */}
+        {isTurnInteractive && turnCountdown && (
+          <div
+            data-testid="turn-countdown-bar"
+            className="w-full max-w-[260px] sm:max-w-xs px-2 mb-2 flex flex-col items-center animate-in fade-in duration-150"
+          >
+            <div className="w-full flex items-center justify-between text-[11px] font-black tracking-wider uppercase mb-1">
+              <span
+                className={`flex items-center gap-1 transition-colors duration-150 ${
+                  turnCountdown.isUrgent
+                    ? 'text-red-400 animate-pulse font-extrabold'
+                    : 'text-emerald-300'
+                }`}
+              >
+                <span>⏱️</span>
+                <span>
+                  {turnCountdown.remainingSeconds > 0
+                    ? `${turnCountdown.remainingSeconds}s remaining`
+                    : 'Waiting for delivery...'}
+                </span>
+              </span>
+              <span
+                className={`px-1.5 py-0.5 rounded text-[10px] font-mono font-bold ${
+                  turnCountdown.isUrgent
+                    ? 'bg-red-500/30 text-red-300 border border-red-500/50 animate-bounce'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                }`}
+              >
+                {turnCountdown.remainingSeconds}s
+              </span>
+            </div>
+            <div className="w-full h-1.5 sm:h-2 bg-slate-900/80 rounded-full overflow-hidden border border-slate-700/60 p-0.5 shadow-inner">
+              <div
+                className={`h-full rounded-full transition-all duration-200 ease-linear ${
+                  turnCountdown.isUrgent
+                    ? 'bg-gradient-to-r from-amber-500 to-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]'
+                    : 'bg-gradient-to-r from-teal-400 to-emerald-400 shadow-[0_0_8px_rgba(16,185,129,0.5)]'
+                }`}
+                style={{
+                  width: `${Math.min(100, Math.max(0, (turnCountdown.remainingSeconds / turnCountdown.totalSeconds) * 100))}%`,
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         {isWaiting ? (
           <div className="flex flex-col items-center text-center">
             <h2 className="text-3xl sm:text-5xl font-black uppercase italic tracking-wide text-amber-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
@@ -212,8 +267,8 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
                     isSelected
                       ? 'bg-gradient-to-b from-amber-300 to-amber-400 text-slate-950 scale-110 ring-4 ring-amber-400/90 shadow-[0_0_25px_rgba(251,191,36,0.6)] border-2 border-white'
                       : isTurnInteractive
-                      ? 'bg-gradient-to-b from-white via-slate-50 to-slate-100 text-blue-700 hover:text-blue-800 hover:scale-105 active:scale-95 border-2 border-white/95 shadow-[0_4px_18px_rgba(0,0,0,0.35)] hover:shadow-[0_6px_24px_rgba(59,130,246,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 cursor-pointer'
-                      : 'bg-white/40 text-slate-400 border border-white/20 cursor-not-allowed opacity-50 scale-95'
+                      ? 'bg-gradient-to-b from-white via-slate-50 to-slate-100 text-blue-700 hover:text-blue-800 hover:scale-105 active:scale-95 hover:shadow-[0_0_20px_rgba(59,130,246,0.5)] border-2 border-white/95 shadow-[0_4px_18px_rgba(0,0,0,0.35)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 cursor-pointer'
+                      : 'bg-white/40 text-slate-400 border border-white/20 cursor-not-allowed opacity-45 scale-95'
                   }
                 `}
                 aria-label={`Select ${num}`}

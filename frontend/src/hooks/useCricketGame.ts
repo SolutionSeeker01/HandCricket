@@ -2,11 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppStage,
   BowlerSelectionPrompt,
+  ConnectionStatus,
   EventFeedback,
   MatchState,
   MilestoneFeedback,
   PreMatchState,
+  TurnCountdown,
 } from '../types';
+import { soundManager } from '../utils/sound';
 
 export function useCricketGame() {
   const [appStage, setAppStage] = useState<AppStage>('INTRO');
@@ -21,19 +24,24 @@ export function useCricketGame() {
     opponentTeam: any;
   } | null>(null);
 
-  const [connectionStatus, setConnectionStatus] = useState<
-    'connecting' | 'connected' | 'error' | 'disconnected'
-  >('connecting');
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [isWaiting, setIsWaiting] = useState<boolean>(false);
   const [eventFeedback, setEventFeedback] = useState<EventFeedback | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [turnCountdown, setTurnCountdown] = useState<TurnCountdown | null>(null);
+  const [isMuted, setIsMuted] = useState<boolean>(() => soundManager.isMuted());
 
   const socketRef = useRef<WebSocket | null>(null);
   const [milestoneFeedback, setMilestoneFeedback] = useState<MilestoneFeedback | null>(null);
   const feedbackTimeoutRef = useRef<number | null>(null);
   const milestoneTimeoutRef = useRef<number | null>(null);
   const reconnectTimeoutRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef<number>(0);
+  const countdownIntervalRef = useRef<number | null>(null);
+  const turnStartTimeRef = useRef<number | null>(null);
+  const turnTotalSecondsRef = useRef<number>(10);
+  const lastUrgentSecondRef = useRef<number | null>(null);
   const prevPlayerScoresRef = useRef<Record<string, number>>({});
   const celebratedMilestonesRef = useRef<Set<string>>(new Set<string>());
   const appStageRef = useRef<AppStage>(appStage);
@@ -47,6 +55,21 @@ export function useCricketGame() {
     tossActiveRef.current = tossActive;
   }, [tossActive]);
 
+  const stopCountdown = useCallback(() => {
+    if (countdownIntervalRef.current) {
+      window.clearInterval(countdownIntervalRef.current);
+      countdownIntervalRef.current = null;
+    }
+    turnStartTimeRef.current = null;
+    lastUrgentSecondRef.current = null;
+    setTurnCountdown(null);
+  }, []);
+
+  const toggleMute = useCallback(() => {
+    const next = soundManager.toggleMute();
+    setIsMuted(next);
+  }, []);
+
   const connect = useCallback(() => {
     if (
       socketRef.current &&
@@ -56,7 +79,9 @@ export function useCricketGame() {
       return;
     }
 
-    setConnectionStatus('connecting');
+    if (reconnectAttemptRef.current === 0) {
+      setConnectionStatus('connecting');
+    }
     setErrorMessage(null);
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -71,6 +96,7 @@ export function useCricketGame() {
 
     ws.onopen = () => {
       if (socketRef.current !== ws) return;
+      reconnectAttemptRef.current = 0;
       setConnectionStatus('connected');
       setErrorMessage(null);
     };
@@ -83,6 +109,7 @@ export function useCricketGame() {
         if (data.type === 'pre_match_state') {
           setPreMatchState(data);
           setIsWaiting(false);
+          stopCountdown();
 
           if (data.toss_winner) {
             setTossOutcome((prev) => ({
@@ -99,6 +126,7 @@ export function useCricketGame() {
             }
           }
         } else if (data.type === 'bowler_selection_required') {
+          stopCountdown();
           setBowlerSelectionPrompt({
             current_over: data.current_over,
             eligible_bowlers: data.eligible_bowlers,
@@ -118,6 +146,55 @@ export function useCricketGame() {
           setSelectedNumber(null);
           setIsWaiting(false);
 
+          // Stop prior countdown and initiate turn countdown if playable
+          stopCountdown();
+
+          const timeoutSec = typeof data.timeout_seconds === 'number' ? data.timeout_seconds : 10;
+          const status = data.match_state?.status;
+          const isPlayable = status === 'INNINGS_1' || status === 'INNINGS_2';
+
+          if (isPlayable && timeoutSec > 0) {
+            turnStartTimeRef.current = Date.now();
+            turnTotalSecondsRef.current = timeoutSec;
+            lastUrgentSecondRef.current = null;
+            setTurnCountdown({
+              remainingSeconds: timeoutSec,
+              totalSeconds: timeoutSec,
+              isUrgent: false,
+            });
+
+            countdownIntervalRef.current = window.setInterval(() => {
+              if (!turnStartTimeRef.current) return;
+              const elapsed = (Date.now() - turnStartTimeRef.current) / 1000;
+              const remaining = Math.max(0, turnTotalSecondsRef.current - elapsed);
+              const roundedCeil = Math.ceil(remaining);
+              const isUrgent = remaining <= 3.0 && remaining > 0;
+
+              if (isUrgent && lastUrgentSecondRef.current !== roundedCeil) {
+                lastUrgentSecondRef.current = roundedCeil;
+                soundManager.playTimerWarning(roundedCeil);
+              }
+
+              if (remaining <= 0) {
+                if (countdownIntervalRef.current) {
+                  window.clearInterval(countdownIntervalRef.current);
+                  countdownIntervalRef.current = null;
+                }
+                setTurnCountdown({
+                  remainingSeconds: 0,
+                  totalSeconds: turnTotalSecondsRef.current,
+                  isUrgent: true,
+                });
+              } else {
+                setTurnCountdown({
+                  remainingSeconds: roundedCeil,
+                  totalSeconds: turnTotalSecondsRef.current,
+                  isUrgent,
+                });
+              }
+            }, 100);
+          }
+
           // If toss screen is currently active (computer won and chose bowl), record authoritative outcome
           if (tossActiveRef.current) {
             setTossOutcome({
@@ -133,12 +210,25 @@ export function useCricketGame() {
           }
         } else if (data.type === 'number_submitted') {
           setIsWaiting(true);
+          stopCountdown();
         } else if (data.type === 'ball_result') {
+          stopCountdown();
           if (data.match_state) {
             setMatchState(data.match_state);
 
             const lastBall = data.match_state.last_ball;
             if (lastBall) {
+              // Trigger authoritative audio
+              if (lastBall.event === 'WICKET') {
+                soundManager.playWicket();
+              } else if (lastBall.event === 'SIX') {
+                soundManager.playSix();
+              } else if (lastBall.event === 'FOUR') {
+                soundManager.playFour();
+              } else {
+                soundManager.playBatHit(lastBall.runs);
+              }
+
               let title = '';
               let subtitle: string | undefined = undefined;
 
@@ -250,6 +340,7 @@ export function useCricketGame() {
         } else if (data.type === 'error') {
           setErrorMessage(data.message || 'An unexpected error occurred.');
           setIsWaiting(false);
+          stopCountdown();
         }
       } catch (err) {
         console.error('Failed to parse WebSocket message:', err);
@@ -266,9 +357,25 @@ export function useCricketGame() {
       if (socketRef.current === ws) {
         setConnectionStatus('disconnected');
         socketRef.current = null;
+        stopCountdown();
+
+        // Attempt graceful reconnection with backoff if within a game
+        if (reconnectAttemptRef.current < 4) {
+          setConnectionStatus('reconnecting');
+          const delay = Math.min(1200 * Math.pow(1.5, reconnectAttemptRef.current), 4000);
+          reconnectAttemptRef.current += 1;
+          if (reconnectTimeoutRef.current) {
+            window.clearTimeout(reconnectTimeoutRef.current);
+          }
+          reconnectTimeoutRef.current = window.setTimeout(() => {
+            connect();
+          }, delay);
+        } else {
+          setConnectionStatus('disconnected');
+        }
       }
     };
-  }, []);
+  }, [stopCountdown]);
 
   const triggerFeedback = (feedback: EventFeedback, durationMs = 1800) => {
     if (feedbackTimeoutRef.current) {
@@ -314,15 +421,17 @@ export function useCricketGame() {
     setTossOutcome(null);
     setMatchState(null);
     setBowlerSelectionPrompt(null);
+    stopCountdown();
     setAppStage('LANDING');
     appStageRef.current = 'LANDING';
-  }, []);
+  }, [stopCountdown]);
 
   const selectTeam = useCallback((teamId: string) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       setErrorMessage('Not connected to game server.');
       return;
     }
+    soundManager.playClick();
     setIsWaiting(true);
     setTossActive(true);
     tossActiveRef.current = true;
@@ -341,6 +450,7 @@ export function useCricketGame() {
       setErrorMessage('Not connected to game server.');
       return;
     }
+    soundManager.playCoinToss();
     setIsWaiting(true);
     setTossActive(false);
     tossActiveRef.current = false;
@@ -348,6 +458,7 @@ export function useCricketGame() {
   }, []);
 
   const finishToss = useCallback(() => {
+    soundManager.playClick();
     setTossActive(false);
     tossActiveRef.current = false;
     if (preMatchState?.stage === 'BOWLER_SELECTION') {
@@ -362,6 +473,7 @@ export function useCricketGame() {
       setErrorMessage('Not connected to game server.');
       return;
     }
+    soundManager.playClick();
     setIsWaiting(true);
     socketRef.current.send(JSON.stringify({ type: 'select_bowler', bowler_id: bowlerId }));
   }, []);
@@ -375,6 +487,8 @@ export function useCricketGame() {
       window.clearTimeout(milestoneTimeoutRef.current);
       milestoneTimeoutRef.current = null;
     }
+    stopCountdown();
+    reconnectAttemptRef.current = 0;
     setTossActive(false);
     tossActiveRef.current = false;
     setTossOutcome(null);
@@ -387,13 +501,15 @@ export function useCricketGame() {
     } else {
       connect();
     }
-  }, [connect]);
+  }, [connect, stopCountdown]);
 
   const submitNumber = useCallback((number: number) => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       setErrorMessage('Not connected to game server.');
       return;
     }
+    soundManager.playClick();
+    stopCountdown();
     setSelectedNumber(number);
     setIsWaiting(true);
     socketRef.current.send(
@@ -403,12 +519,13 @@ export function useCricketGame() {
         turn_id: matchState?.turn_id,
       })
     );
-  }, [matchState?.turn_id]);
+  }, [matchState?.turn_id, stopCountdown]);
 
   const startNextInnings = useCallback(() => {
     if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       return;
     }
+    soundManager.playClick();
     socketRef.current.send(JSON.stringify({ type: 'start_innings_2' }));
   }, []);
 
@@ -421,6 +538,8 @@ export function useCricketGame() {
       window.clearTimeout(milestoneTimeoutRef.current);
       milestoneTimeoutRef.current = null;
     }
+    stopCountdown();
+    reconnectAttemptRef.current = 0;
     setSelectedNumber(null);
     setIsWaiting(false);
     setEventFeedback(null);
@@ -440,24 +559,31 @@ export function useCricketGame() {
     } else {
       connect();
     }
-  }, [connect]);
+  }, [connect, stopCountdown]);
 
   useEffect(() => {
     connect();
 
     return () => {
+      stopCountdown();
       if (feedbackTimeoutRef.current) {
         window.clearTimeout(feedbackTimeoutRef.current);
+        feedbackTimeoutRef.current = null;
+      }
+      if (milestoneTimeoutRef.current) {
+        window.clearTimeout(milestoneTimeoutRef.current);
+        milestoneTimeoutRef.current = null;
       }
       if (reconnectTimeoutRef.current) {
         window.clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       if (socketRef.current) {
         socketRef.current.close();
         socketRef.current = null;
       }
     };
-  }, [connect]);
+  }, [connect, stopCountdown]);
 
   return {
     appStage,
@@ -467,6 +593,9 @@ export function useCricketGame() {
     bowlerSelectionPrompt,
     matchState,
     connectionStatus,
+    turnCountdown,
+    isMuted,
+    toggleMute,
     selectedNumber,
     isWaiting,
     eventFeedback,

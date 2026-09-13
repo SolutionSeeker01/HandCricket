@@ -6,6 +6,8 @@ interface SettingsModalProps {
   matchState: MatchState | null;
   onClose: () => void;
   onResetMatch: () => void;
+  isMuted?: boolean;
+  onToggleMute?: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -13,6 +15,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   matchState,
   onClose,
   onResetMatch,
+  isMuted = false,
+  onToggleMute,
 }) => {
   if (!isOpen) {
     return null;
@@ -67,6 +71,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <span>{matchState.target} runs</span>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Sound & Audio Control Card */}
+        {onToggleMute && (
+          <div className="bg-slate-800/60 rounded-2xl p-4 border border-slate-700/60 mb-4 flex items-center justify-between">
+            <div>
+              <div className="font-bold text-white text-xs sm:text-sm flex items-center space-x-1.5">
+                <span>{isMuted ? '🔇' : '🔊'}</span>
+                <span>Game Audio & SFX</span>
+              </div>
+              <div className="text-[11px] text-slate-400 mt-0.5">
+                Bat hits, crowd cheers, boundary & wicket sounds
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onToggleMute}
+              data-testid="settings-audio-toggle"
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs transition-all active:scale-95 ${
+                isMuted
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'bg-amber-400 text-slate-950 hover:bg-amber-300 font-extrabold shadow-md shadow-amber-500/20'
+              }`}
+            >
+              {isMuted ? 'Sound: OFF' : 'Sound: ON'}
+            </button>
           </div>
         )}
 
