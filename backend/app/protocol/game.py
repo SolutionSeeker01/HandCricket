@@ -35,7 +35,7 @@ class ComputerGameSession:
           are computed by the backend domain engine.
         - The human player connects via WebSocket.
         - The computer player runs server-side via ComputerPlayer.
-        - Timer is 5 seconds per turn. If human player times out, computer fallback is used.
+        - Timer is 10 seconds per turn. If human player times out, computer fallback is used.
         - Hidden choice invariant: user choices are acknowledged without revelation until resolution.
     """
 
@@ -43,7 +43,7 @@ class ComputerGameSession:
         self,
         user_team_id: str = "IND",
         opponent_team_id: str = "AUS",
-        timeout_seconds: float = 5.0,
+        timeout_seconds: float = 10.0,
         max_overs: int = 5,
         balls_per_over: int = 6,
         computer_bot: Optional[ComputerPlayer] = None,
@@ -319,7 +319,7 @@ class ComputerGameSession:
             self._timer_task = asyncio.create_task(self._run_timer())
 
     async def _run_timer(self) -> None:
-        """5-second server-authoritative timer for Computer Mode."""
+        """10-second server-authoritative timer for Computer Mode."""
         try:
             await asyncio.sleep(self._timeout_seconds)
             async with self._lock:

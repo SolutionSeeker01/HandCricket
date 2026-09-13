@@ -85,7 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <strong>Wicket</strong>: If both choices match, the batsman is <strong className="text-red-400">OUT!</strong>
             </li>
             <li>
-              <strong>Turn Timer</strong>: You have <strong className="text-sky-300">5 seconds</strong> to pick your number before a random ball is chosen.
+              <strong>Turn Timer</strong>: You have <strong className="text-amber-400">10 seconds</strong> to pick your number before a random ball is chosen.
             </li>
             <li>
               <strong>Target Chase</strong>: In Innings 2, chasing team tries to exceed Innings 1 score to win.

@@ -25,240 +25,167 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
     matchState.status !== 'COMPLETED';
 
   return (
-    <div className="relative w-full flex-1 flex flex-col items-center justify-between overflow-hidden select-none px-2 py-1 sm:py-2">
-      {/* 1. STADIUM & DUSK ATMOSPHERE BACKGROUND */}
-      <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
-        {/* Sky gradient: Deep twilight into stadium atmosphere */}
-        <div className="absolute inset-0 bg-gradient-to-b from-[#080d1a] via-[#101b33] to-[#0c1424]" />
-
-        {/* Floodlight Beams Left & Right */}
-        <div className="absolute -top-10 left-1/4 w-72 h-96 bg-sky-400/10 blur-3xl rounded-full transform -rotate-12 pointer-events-none" />
-        <div className="absolute -top-10 right-1/4 w-72 h-96 bg-amber-300/10 blur-3xl rounded-full transform rotate-12 pointer-events-none" />
-
-        {/* Stadium Floodlight Towers */}
-        <div className="absolute top-1 left-3 sm:left-12 flex flex-col items-center opacity-80">
-          <div className="w-12 h-6 bg-slate-800 rounded-sm border border-slate-600 grid grid-cols-4 gap-0.5 p-0.5 shadow-lg shadow-sky-400/20">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-amber-100/90 rounded-[1px] h-2 shadow-sm shadow-white" />
-            ))}
-          </div>
-          <div className="w-1 h-16 sm:h-24 bg-gradient-to-b from-slate-600 to-transparent" />
-        </div>
-
-        <div className="absolute top-1 right-3 sm:right-12 flex flex-col items-center opacity-80">
-          <div className="w-12 h-6 bg-slate-800 rounded-sm border border-slate-600 grid grid-cols-4 gap-0.5 p-0.5 shadow-lg shadow-sky-400/20">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-amber-100/90 rounded-[1px] h-2 shadow-sm shadow-white" />
-            ))}
-          </div>
-          <div className="w-1 h-16 sm:h-24 bg-gradient-to-b from-slate-600 to-transparent" />
-        </div>
-
-        {/* Stadium Tier / Crowd Silhouette Curve */}
-        <div className="absolute top-16 sm:top-20 inset-x-0 h-28 bg-gradient-to-b from-[#18233d] to-[#0d1627] rounded-b-[40%] opacity-90 border-b border-sky-500/20 shadow-inner flex items-center justify-center">
-          <div className="w-full h-full opacity-20 bg-[radial-gradient(#38bdf8_1px,transparent_1px)] [background-size:12px_12px]" />
-        </div>
-
-        {/* Ground Turf Field */}
-        <div className="absolute bottom-0 inset-x-0 h-[65%] bg-gradient-to-t from-[#15602a] via-[#1b7334] to-[#124d22] rounded-t-[35%] border-t-2 border-emerald-400/20 shadow-2xl">
-          {/* Subtle grass texture stripes */}
-          <div className="absolute inset-0 opacity-15 bg-[repeating-linear-gradient(90deg,#000,#000_30px,#fff_30px,#fff_60px)]" />
-        </div>
-      </div>
-
-      {/* 2. CENTRAL CRICKET PITCH (SVG Canvas for crisp perspective) */}
-      <div className="relative w-full max-w-sm sm:max-w-md h-40 sm:h-52 flex items-center justify-center mt-2 sm:mt-4">
-        {/* Pitch Graphic */}
-        <svg
-          viewBox="0 0 400 240"
-          className="w-full h-full drop-shadow-2xl overflow-visible"
-          preserveAspectRatio="xMidYMid meet"
-        >
-          {/* Pitch dirt surface with perspective trapezoid */}
-          <polygon
-            points="140,20 260,20 320,220 80,220"
-            fill="url(#pitchGradient)"
-            stroke="#b45309"
-            strokeWidth="1.5"
-            strokeOpacity="0.4"
-          />
-
-          {/* Gradients */}
-          <defs>
-            <linearGradient id="pitchGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stopColor="#ca8a04" stopOpacity="0.8" />
-              <stop offset="40%" stopColor="#d97706" stopOpacity="0.9" />
-              <stop offset="100%" stopColor="#b45309" stopOpacity="1" />
-            </linearGradient>
-            <linearGradient id="stumpGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#fef08a" />
-              <stop offset="50%" stopColor="#facc15" />
-              <stop offset="100%" stopColor="#ca8a04" />
-            </linearGradient>
-          </defs>
-
-          {/* Crease Markings (Popping & Bowling crease lines) */}
-          <line x1="110" y1="180" x2="290" y2="180" stroke="white" strokeWidth="3" strokeOpacity="0.9" />
-          <line x1="130" y1="200" x2="270" y2="200" stroke="white" strokeWidth="2" strokeOpacity="0.7" />
-          <line x1="150" y1="40" x2="250" y2="40" stroke="white" strokeWidth="2" strokeOpacity="0.6" />
-
-          {/* 3 Wickets & Bails (Stumps) */}
-          <g transform="translate(165, 120)">
-            {/* Wicket shadow */}
-            <ellipse cx="35" cy="62" rx="45" ry="5" fill="#000" opacity="0.3" />
-
-            {/* Stump 1 (Off) */}
-            <rect
-              x="14"
-              y="5"
-              width="7"
-              height="55"
-              rx="3"
-              fill="url(#stumpGradient)"
-              className={eventFeedback?.type === 'WICKET' ? 'animate-spin transform origin-bottom' : ''}
-            />
-
-            {/* Stump 2 (Middle) */}
-            <rect
-              x="32"
-              y="5"
-              width="7"
-              height="55"
-              rx="3"
-              fill="url(#stumpGradient)"
-              className={eventFeedback?.type === 'WICKET' ? 'animate-ping transform origin-center' : ''}
-            />
-
-            {/* Stump 3 (Leg) */}
-            <rect
-              x="50"
-              y="5"
-              width="7"
-              height="55"
-              rx="3"
-              fill="url(#stumpGradient)"
-              className={eventFeedback?.type === 'WICKET' ? 'animate-bounce transform origin-bottom' : ''}
-            />
-
-            {/* Bails */}
-            <rect
-              x="11"
-              y="2"
-              width="24"
-              height="4"
-              rx="2"
-              fill="#fef08a"
-              className={eventFeedback?.type === 'WICKET' ? '-translate-y-8 translate-x-4 rotate-45 transition-transform' : ''}
-            />
-            <rect
-              x="36"
-              y="2"
-              width="24"
-              height="4"
-              rx="2"
-              fill="#fef08a"
-              className={eventFeedback?.type === 'WICKET' ? '-translate-y-10 -translate-x-4 -rotate-45 transition-transform' : ''}
-            />
-          </g>
-        </svg>
-
-        {/* 3. EVENT CELEBRATION OVERLAYS (FOUR / SIX / WICKET) */}
-        {eventFeedback && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none animate-in fade-in zoom-in duration-200">
-            {/* FOUR CELEBRATION */}
-            {eventFeedback.type === 'FOUR' && (
-              <div className="flex flex-col items-center">
-                <div className="text-7xl sm:text-9xl font-black text-sky-400 drop-shadow-[0_0_35px_rgba(56,189,248,0.8)] italic tracking-tighter scale-110 animate-bounce">
-                  4
-                </div>
-                <div className="text-3xl sm:text-5xl font-black italic tracking-widest text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] bg-gradient-to-r from-sky-400 via-blue-200 to-sky-400 bg-clip-text text-transparent -mt-2">
-                  FOUR!
-                </div>
-              </div>
-            )}
-
-            {/* SIX CELEBRATION */}
-            {eventFeedback.type === 'SIX' && (
-              <div className="flex flex-col items-center">
-                <div className="text-7xl sm:text-9xl font-black text-amber-400 drop-shadow-[0_0_40px_rgba(251,191,36,0.9)] italic tracking-tighter scale-110 animate-bounce">
-                  6
-                </div>
-                <div className="text-3xl sm:text-5xl font-black italic tracking-widest text-white drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] bg-gradient-to-r from-amber-300 via-yellow-100 to-amber-400 bg-clip-text text-transparent -mt-2">
-                  SIX!
-                </div>
-              </div>
-            )}
-
-            {/* WICKET CELEBRATION */}
-            {eventFeedback.type === 'WICKET' && (
-              <div className="flex flex-col items-center animate-in zoom-in-95 duration-150">
-                <div className="bg-red-600/90 border-2 border-red-400 px-6 py-1.5 rounded-2xl shadow-[0_0_40px_rgba(239,68,68,0.8)] text-3xl sm:text-5xl font-black italic tracking-wider text-white">
-                  WICKET!
-                </div>
-                {eventFeedback.subtitle && (
-                  <div className="mt-2 text-sm sm:text-lg font-bold text-amber-300 drop-shadow-md bg-black/60 px-4 py-1 rounded-full border border-amber-400/30">
-                    {eventFeedback.subtitle}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 4. CENTRAL PROMPT & ACTION AREA */}
-      <div className="w-full flex flex-col items-center justify-center my-1 sm:my-2 z-10">
-        {/* Dynamic Header Prompt: "Your Call!" */}
-        <h2 className="text-3xl sm:text-5xl font-black italic tracking-wide text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.8)] font-serif">
-          {userIsBatting ? 'Your Call!' : 'Bowl Now!'}
-        </h2>
-        <p className="text-xs sm:text-sm font-semibold tracking-wide text-sky-200/90 drop-shadow mt-0.5">
-          {userIsBatting
-            ? 'Choose a number (1 – 6)'
-            : 'Select your delivery (1 – 6)'}
-        </p>
-
-        {/* Non-disruptive waiting indicator within arena (NO separate screen!) */}
-        {isWaiting && (
-          <div className="flex items-center space-x-2 mt-1 px-3 py-1 rounded-full bg-slate-900/80 border border-sky-400/40 shadow-md animate-pulse">
-            <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            <span className="text-xs font-semibold text-sky-200">
-              Opponent is choosing…
+    <div className="relative w-full flex-1 flex flex-col items-center justify-end overflow-hidden select-none px-2 pb-2 sm:pb-3">
+      {/* 1. BALL RESULT REVEAL OVERLAY (EVERY BALL SHOWS YOU vs COMPUTER) */}
+      {eventFeedback && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-30 pointer-events-none px-4 animate-in fade-in zoom-in-95 duration-150">
+          <div className="bg-slate-950/95 border-2 border-amber-400/80 rounded-3xl p-4 sm:p-5 shadow-[0_0_60px_rgba(0,0,0,0.9)] flex flex-col items-center text-center backdrop-blur-md max-w-xs sm:max-w-sm w-full">
+            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-amber-400/90 mb-1.5">
+              Delivery Reveal
             </span>
+
+            {/* YOU vs COMPUTER NUMBERS */}
+            <div className="flex items-center justify-center space-x-5 sm:space-x-7 my-1.5">
+              {/* YOU */}
+              <div className="flex flex-col items-center">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
+                  You
+                </span>
+                <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 border-2 border-amber-400 flex items-center justify-center text-3xl sm:text-4xl font-black text-amber-300 shadow-md">
+                  {eventFeedback.userChoice ?? '-'}
+                </div>
+              </div>
+
+              {/* VS */}
+              <div className="text-sm sm:text-base font-black italic text-slate-500 pt-5">
+                VS
+              </div>
+
+              {/* COMPUTER */}
+              <div className="flex flex-col items-center">
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-300 mb-1">
+                  Computer
+                </span>
+                <div className="w-13 h-13 sm:w-16 sm:h-16 rounded-2xl bg-slate-900 border-2 border-slate-600 flex items-center justify-center text-3xl sm:text-4xl font-black text-slate-100 shadow-md">
+                  {eventFeedback.computerChoice ?? '-'}
+                </div>
+              </div>
+            </div>
+
+            {/* CONTEXTUAL OUTCOME BADGE */}
+            <div className="mt-3 w-full">
+              {eventFeedback.type === 'WICKET' && (
+                <div className="bg-red-600 border border-red-400 text-white font-black text-base sm:text-lg py-1.5 px-3 rounded-xl shadow-lg">
+                  WICKET!
+                  {eventFeedback.subtitle && (
+                    <div className="text-xs font-semibold text-red-100 mt-0.5">
+                      {eventFeedback.subtitle}
+                    </div>
+                  )}
+                </div>
+              )}
+              {eventFeedback.type === 'SIX' && (
+                <div className="bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-slate-950 font-black text-base sm:text-lg py-1.5 px-3 rounded-xl shadow-lg">
+                  <span>SIX!</span> <span className="text-xs font-bold">+6 RUNS</span>
+                </div>
+              )}
+              {eventFeedback.type === 'FOUR' && (
+                <div className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 text-slate-950 font-black text-base sm:text-lg py-1.5 px-3 rounded-xl shadow-lg">
+                  <span>FOUR!</span> <span className="text-xs font-bold">+4 RUNS</span>
+                </div>
+              )}
+              {eventFeedback.type === 'NORMAL' && (
+                <div className="bg-slate-800/95 border border-amber-400/40 text-amber-300 font-black text-sm sm:text-base py-1.5 px-3 rounded-xl shadow-md">
+                  {eventFeedback.runs === 0 ? 'DOT BALL (0 Runs)' : `+${eventFeedback.runs} ${eventFeedback.runs === 1 ? 'RUN' : 'RUNS'}`}
+                </div>
+              )}
+              {eventFeedback.userTimedOut && (
+                <div className="text-[10px] text-amber-400 font-semibold mt-1">
+                  ⏱️ Auto-picked on timeout
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. DYNAMIC DUAL-TONE HEADING WITH YELLOW BRUSH UNDERLINE */}
+      <div className="w-full flex flex-col items-center justify-center mb-3 sm:mb-4 z-10">
+        {isWaiting ? (
+          <div className="flex flex-col items-center text-center">
+            <h2 className="text-3xl sm:text-5xl font-black uppercase italic tracking-wide text-amber-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
+              WAITING FOR OPPONENT
+            </h2>
+            <svg
+              className="w-48 sm:w-64 h-3.5 text-amber-400 -mt-0.5 mb-1"
+              viewBox="0 0 160 12"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                d="M3 9C45 3 115 2 157 7C125 10 50 11 3 9Z"
+                fill="currentColor"
+                opacity="0.9"
+              />
+            </svg>
+            <p className="text-xs sm:text-sm font-bold text-slate-200 drop-shadow flex items-center justify-center space-x-1.5 mt-0.5">
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block mr-1.5" />
+              <span>Resolving delivery...</span>
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center text-center">
+            {/* Heading: YOUR SHOT (white + gold) */}
+            <div className="relative inline-flex flex-col items-center">
+              <h2 className="text-4xl sm:text-6xl font-black uppercase italic tracking-wide drop-shadow-[0_4px_12px_rgba(0,0,0,0.9)] font-sans">
+                <span className="sr-only">{userIsBatting ? 'YOUR SHOT' : 'YOUR DELIVERY'}</span>
+                <span aria-hidden="true">
+                  <span className="text-white">YOUR </span>
+                  <span className="text-[#facc15]">{userIsBatting ? 'SHOT' : 'DELIVERY'}</span>
+                </span>
+              </h2>
+              {/* Yellow Brush Underline under SHOT / DELIVERY */}
+              <svg
+                className="w-28 sm:w-44 h-3 sm:h-4 text-[#facc15] self-end mr-1 sm:mr-3 -mt-1 sm:-mt-1.5 mb-1"
+                viewBox="0 0 140 14"
+                fill="none"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path
+                  d="M4 11C35 4 85 2 136 7C105 11 50 12 4 11Z"
+                  fill="currentColor"
+                  opacity="0.95"
+                />
+              </svg>
+            </div>
+            <p className="text-xs sm:text-sm font-bold tracking-wide text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] mt-0.5">
+              {userIsBatting
+                ? 'Choose your number (1 – 6)'
+                : 'Choose your delivery (1 – 6)'}
+            </p>
           </div>
         )}
       </div>
 
-      {/* 5. NUMBER SELECTION BUTTONS (1, 2, 3, 4, 5, 6) */}
-      <div className="w-full max-w-sm sm:max-w-md flex items-center justify-between gap-1.5 sm:gap-3 px-2 py-2 z-10">
-        {[1, 2, 3, 4, 5, 6].map((num) => {
-          const isSelected = selectedNumber === num;
-          return (
-            <button
-              key={num}
-              onClick={() => onSelectNumber(num)}
-              disabled={!isTurnInteractive}
-              className={`
-                relative flex-1 aspect-square max-w-[56px] sm:max-w-[64px]
-                flex items-center justify-center rounded-full font-black text-xl sm:text-2xl
-                transition-all duration-150 shadow-xl select-none
-                ${
-                  isSelected
-                    ? 'bg-gradient-to-b from-amber-300 to-amber-500 text-slate-950 scale-110 ring-4 ring-amber-300/80 shadow-amber-500/50'
-                    : isTurnInteractive
-                    ? 'bg-gradient-to-b from-white via-slate-100 to-sky-100 text-slate-900 hover:scale-105 active:scale-95 hover:border-sky-400 border-2 border-white/80 shadow-sky-900/50'
-                    : 'bg-slate-700/60 text-slate-400 border border-slate-600/40 cursor-not-allowed opacity-75'
-                }
-              `}
-              aria-label={`Select ${num}`}
-            >
-              <span>{num}</span>
-              {isSelected && (
-                <span className="absolute -top-1 -right-1 w-3 h-3 bg-sky-400 rounded-full animate-ping" />
-              )}
-            </button>
-          );
-        })}
+      {/* 3. CIRCULAR WHITE KEYPAD (1 - 6) MATCHING REFERENCE SPEC */}
+      <div className="w-full max-w-sm sm:max-w-lg flex items-center justify-center z-10 mb-2 sm:mb-4">
+        <div className="flex items-center justify-center gap-2.5 sm:gap-4 w-full px-2">
+          {[1, 2, 3, 4, 5, 6].map((num) => {
+            const isSelected = selectedNumber === num;
+            return (
+              <button
+                key={num}
+                onClick={() => onSelectNumber(num)}
+                disabled={!isTurnInteractive}
+                className={`
+                  relative w-13 h-13 sm:w-18 sm:h-18 rounded-full aspect-square
+                  flex items-center justify-center font-black text-2xl sm:text-4xl
+                  transition-all duration-150 select-none
+                  ${
+                    isSelected
+                      ? 'bg-gradient-to-b from-amber-300 to-amber-400 text-slate-950 scale-110 ring-4 ring-amber-400/90 shadow-[0_0_25px_rgba(251,191,36,0.6)] border-2 border-white'
+                      : isTurnInteractive
+                      ? 'bg-gradient-to-b from-white via-slate-50 to-slate-100 text-blue-700 hover:text-blue-800 hover:scale-105 active:scale-95 border-2 border-white/95 shadow-[0_4px_18px_rgba(0,0,0,0.35)] hover:shadow-[0_6px_24px_rgba(59,130,246,0.45)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 cursor-pointer'
+                      : 'bg-white/40 text-slate-400 border border-white/20 cursor-not-allowed opacity-50 scale-95'
+                  }
+                `}
+                aria-label={`Select ${num}`}
+              >
+                <span>{num}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

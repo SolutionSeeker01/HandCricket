@@ -69,4 +69,7 @@ export interface EventFeedback {
   title: string;
   subtitle?: string;
   number?: number;
+  userChoice?: number;
+  computerChoice?: number;
+  userTimedOut?: boolean;
 }

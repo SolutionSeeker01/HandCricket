@@ -13,14 +13,14 @@ client = TestClient(app)
 
 
 def test_computer_mode_connection_and_turn_started():
-    """Client connecting with mode=computer receives turn_started with match state."""
-    session = ComputerGameSession(timeout_seconds=5.0)
+    """Client connecting with mode=computer receives turn_started with match state and 10s timeout."""
+    session = ComputerGameSession()
     reset_standalone_computer_session(session)
 
     with client.websocket_connect("/ws?mode=computer") as ws:
         msg = ws.receive_json()
         assert msg["type"] == "turn_started"
-        assert msg["timeout_seconds"] == 5.0
+        assert msg["timeout_seconds"] == 10.0
         assert "match_state" in msg
 
         state = msg["match_state"]
@@ -409,4 +409,39 @@ def test_bowler_stats_sixth_ball_attribution_including_non_eleven_bowler():
         assert session.innings_1_bowler_stats[11]["runs"] == 12
 
     asyncio.run(_run())
+
+
+def test_computer_mode_default_timeout_is_10_seconds():
+    """Verify ComputerGameSession defaults to a 10.0-second turn timeout."""
+    session = ComputerGameSession()
+    assert session._timeout_seconds == 10.0
+
+
+def test_computer_mode_timeout_fallback_resolves_ball():
+    """If user times out (tested with fast injected timeout), server generates random fallback choice and resolves ball."""
+    async def _run():
+        bot = ComputerPlayer(chooser=lambda: 3)
+        session = ComputerGameSession(
+            timeout_seconds=0.08,
+            computer_bot=bot,
+        )
+        await session.start_turn()
+        assert session.turn_number == 1
+        assert session.is_turn_active is True
+
+        # Wait for timer of turn 1 to expire (80ms < 110ms < 160ms)
+        await asyncio.sleep(0.11)
+
+        # Cancel pending timer for turn 2 so test leaves clean state
+        if session._timer_task and not session._timer_task.done():
+            session._timer_task.cancel()
+
+        # Ball 1 was resolved via timeout fallback
+        assert session.match.innings_1.total_balls == 1
+        assert session.turn_number == 2
+        assert session._last_ball_info is not None
+        assert session._last_ball_info["user_timed_out"] is True
+
+    asyncio.run(_run())
+
 

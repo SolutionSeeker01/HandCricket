@@ -63,30 +63,35 @@ export function useCricketGame() {
 
             const lastBall = data.match_state.last_ball;
             if (lastBall) {
-              if (lastBall.event === 'FOUR') {
-                triggerFeedback({
-                  type: 'FOUR',
-                  runs: 4,
-                  title: 'FOUR!',
-                  number: 4,
-                });
+              let title = '';
+              let subtitle: string | undefined = undefined;
+
+              if (lastBall.event === 'WICKET') {
+                title = 'WICKET!';
+                subtitle = lastBall.out_player
+                  ? `${lastBall.out_player} is out!`
+                  : 'Batter is out!';
               } else if (lastBall.event === 'SIX') {
-                triggerFeedback({
-                  type: 'SIX',
-                  runs: 6,
-                  title: 'SIX!',
-                  number: 6,
-                });
-              } else if (lastBall.event === 'WICKET') {
-                triggerFeedback({
-                  type: 'WICKET',
-                  runs: 0,
-                  title: 'WICKET!',
-                  subtitle: lastBall.out_player
-                    ? `${lastBall.out_player} is out!`
-                    : 'Batter is out!',
-                });
+                title = 'SIX!';
+                subtitle = '+6 RUNS';
+              } else if (lastBall.event === 'FOUR') {
+                title = 'FOUR!';
+                subtitle = '+4 RUNS';
+              } else {
+                title = lastBall.runs === 0 ? 'DOT BALL' : `+${lastBall.runs} ${lastBall.runs === 1 ? 'RUN' : 'RUNS'}`;
+                subtitle = lastBall.runs === 0 ? '0 Runs scored' : `+${lastBall.runs} Runs scored`;
               }
+
+              triggerFeedback({
+                type: lastBall.event,
+                runs: lastBall.runs,
+                title,
+                subtitle,
+                number: lastBall.runs,
+                userChoice: lastBall.user_choice,
+                computerChoice: lastBall.computer_choice,
+                userTimedOut: lastBall.user_timed_out,
+              });
             }
           }
         } else if (data.type === 'error') {
@@ -119,7 +124,7 @@ export function useCricketGame() {
     setEventFeedback(feedback);
     feedbackTimeoutRef.current = window.setTimeout(() => {
       setEventFeedback(null);
-    }, 1600);
+    }, 1800);
   };
 
   const submitNumber = useCallback((number: number) => {

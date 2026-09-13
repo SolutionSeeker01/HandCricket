@@ -24,7 +24,7 @@ class TurnProtocolError(Exception):
         self.message = message
 
 
-def serialize_turn_started(timeout_seconds: float = 5.0) -> Dict[str, Any]:
+def serialize_turn_started(timeout_seconds: float = 10.0) -> Dict[str, Any]:
     """Build the 'turn_started' message payload."""
     return {
         "type": TYPE_TURN_STARTED,

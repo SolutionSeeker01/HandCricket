@@ -63,7 +63,10 @@ export default function App() {
   }
 
   return (
-    <div className="relative w-full h-[100dvh] max-h-[100dvh] flex flex-col items-center justify-between overflow-hidden bg-slate-950 text-white select-none">
+    <div className="relative w-full h-[100dvh] max-h-[100dvh] flex flex-col items-center justify-between overflow-hidden bg-[url('/stadium_bg.jpg')] bg-cover bg-center bg-no-repeat text-white select-none">
+      {/* Soft atmospheric overlay for readability */}
+      <div className="absolute inset-0 bg-gradient-to-b from-slate-950/30 via-transparent to-slate-950/50 pointer-events-none z-0" />
+
       {/* Top Header */}
       <Header matchState={matchState} onOpenSettings={() => setShowSettings(true)} />
 

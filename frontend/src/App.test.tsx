@@ -72,9 +72,14 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(screen.getAllByText('0.3-4-0').length).toBeGreaterThan(0);
 
     // Over balls (1, 0, 4)
-    expect(screen.getByText('1')).toBeDefined();
-    expect(screen.getByText('0')).toBeDefined();
-    expect(screen.getByText('4')).toBeDefined();
+    expect(screen.getAllByText('1').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('0').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('4').length).toBeGreaterThan(0);
+  });
+
+  it('Scoreboard displays batsman runs WITHOUT (Xb) ball count notation per Section 13', () => {
+    render(<Scoreboard matchState={mockMatchState} />);
+    expect(screen.queryByText(/b\)/)).toBeNull();
   });
 
   it('PitchArena renders 1-6 buttons and triggers onSelectNumber when clicked', () => {
@@ -89,13 +94,32 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
-    expect(screen.getByText('Your Call!')).toBeDefined();
-    expect(screen.getByText('Choose a number (1 – 6)')).toBeDefined();
+    expect(screen.getByText('YOUR SHOT')).toBeDefined();
+    expect(screen.getByText('Choose your number (1 – 6)')).toBeDefined();
 
     // Click button '4'
     const btn4 = screen.getByLabelText('Select 4');
     fireEvent.click(btn4);
     expect(handleSelect).toHaveBeenCalledWith(4);
+  });
+
+  it('PitchArena renders YOUR DELIVERY when user is bowling in Innings 2', () => {
+    const bowlingState: MatchState = {
+      ...mockMatchState,
+      user_is_batting: false,
+    };
+    render(
+      <PitchArena
+        matchState={bowlingState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={null}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('YOUR DELIVERY')).toBeDefined();
+    expect(screen.getByText('Choose your delivery (1 – 6)')).toBeDefined();
   });
 
   it('PitchArena keeps user on arena while waiting (NO separate waiting screen)', () => {
@@ -109,43 +133,86 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
-    // Arena elements are STILL fully visible
-    expect(screen.getByText('Your Call!')).toBeDefined();
-    // Non-disruptive indicator is present
-    expect(screen.getByText('Opponent is choosing…')).toBeDefined();
+    // Arena elements are STILL fully visible with context-aware waiting
+    expect(screen.getByText('WAITING FOR OPPONENT')).toBeDefined();
+    expect(screen.getByText('Resolving delivery...')).toBeDefined();
     // Buttons are still present on screen
     expect(screen.getByLabelText('Select 4')).toBeDefined();
   });
 
-  it('PitchArena displays FOUR celebration overlay', () => {
+  it('PitchArena displays delivery reveal for ordinary numbers (1, 2, 3, 5 runs)', () => {
     render(
       <PitchArena
         matchState={mockMatchState}
         selectedNumber={null}
         isWaiting={false}
-        eventFeedback={{ type: 'FOUR', runs: 4, title: 'FOUR!', number: 4 }}
+        eventFeedback={{
+          type: 'NORMAL',
+          runs: 3,
+          title: '+3 RUNS',
+          number: 3,
+          userChoice: 3,
+          computerChoice: 5,
+        }}
+        onSelectNumber={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('Delivery Reveal')).toBeDefined();
+    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('5').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText('+3 RUNS')).toBeDefined();
+  });
+
+  it('PitchArena displays FOUR celebration overlay with number reveal', () => {
+    render(
+      <PitchArena
+        matchState={mockMatchState}
+        selectedNumber={null}
+        isWaiting={false}
+        eventFeedback={{
+          type: 'FOUR',
+          runs: 4,
+          title: 'FOUR!',
+          number: 4,
+          userChoice: 4,
+          computerChoice: 2,
+        }}
         onSelectNumber={vi.fn()}
       />
     );
 
     expect(screen.getByText('FOUR!')).toBeDefined();
+    expect(screen.getByText('Delivery Reveal')).toBeDefined();
+    expect(screen.getAllByText('4').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('PitchArena displays SIX celebration overlay', () => {
+  it('PitchArena displays SIX celebration overlay with number reveal', () => {
     render(
       <PitchArena
         matchState={mockMatchState}
         selectedNumber={null}
         isWaiting={false}
-        eventFeedback={{ type: 'SIX', runs: 6, title: 'SIX!', number: 6 }}
+        eventFeedback={{
+          type: 'SIX',
+          runs: 6,
+          title: 'SIX!',
+          number: 6,
+          userChoice: 6,
+          computerChoice: 1,
+        }}
         onSelectNumber={vi.fn()}
       />
     );
 
     expect(screen.getByText('SIX!')).toBeDefined();
+    expect(screen.getByText('Delivery Reveal')).toBeDefined();
+    expect(screen.getAllByText('6').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('1').length).toBeGreaterThanOrEqual(2);
   });
 
-  it('PitchArena displays WICKET celebration overlay with out batsman', () => {
+  it('PitchArena displays WICKET celebration overlay with out batsman and number reveal', () => {
     render(
       <PitchArena
         matchState={mockMatchState}
@@ -156,6 +223,8 @@ describe('Slice 12 Frontend Component Tests', () => {
           runs: 0,
           title: 'WICKET!',
           subtitle: 'Rohit Sharma is out!',
+          userChoice: 3,
+          computerChoice: 3,
         }}
         onSelectNumber={vi.fn()}
       />
@@ -163,6 +232,17 @@ describe('Slice 12 Frontend Component Tests', () => {
 
     expect(screen.getByText('WICKET!')).toBeDefined();
     expect(screen.getByText('Rohit Sharma is out!')).toBeDefined();
+    expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('Scoreboard places bowler on User side and batters on Computer side when computer is batting', () => {
+    const compBattingState: MatchState = {
+      ...mockMatchState,
+      user_is_batting: false,
+    };
+    render(<Scoreboard matchState={compBattingState} />);
+    expect(screen.getAllByText('Batting').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Bowling').length).toBeGreaterThan(0);
   });
 
   it('InningsBreakModal displays 1st innings score, target, and triggers Next Innings', () => {
