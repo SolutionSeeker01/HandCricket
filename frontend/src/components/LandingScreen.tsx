@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 
 interface LandingScreenProps {
   onPlayVsComputer: () => void;
+  onPlayWithFriend?: () => void;
 }
 
-export const LandingScreen: React.FC<LandingScreenProps> = ({ onPlayVsComputer }) => {
+export const LandingScreen: React.FC<LandingScreenProps> = ({
+  onPlayVsComputer,
+  onPlayWithFriend,
+}) => {
   const [showRules, setShowRules] = useState(false);
 
   return (
@@ -61,29 +65,56 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({ onPlayVsComputer }
           </div>
         </div>
 
-        {/* Play with Friend (COMING SOON) */}
-        <div className="relative flex flex-col justify-between p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-slate-900/50 to-slate-950/70 border border-white/15 opacity-80 backdrop-blur-sm select-none cursor-not-allowed">
-          <div className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full bg-amber-500/25 border border-amber-400/40 text-[10px] font-black tracking-wider text-amber-300 uppercase">
-            COMING SOON
+        {/* Play with Friend (Active when callback provided, otherwise Coming Soon) */}
+        <div
+          onClick={onPlayWithFriend}
+          role={onPlayWithFriend ? 'button' : undefined}
+          tabIndex={onPlayWithFriend ? 0 : -1}
+          aria-disabled={!onPlayWithFriend}
+          onKeyDown={(e) => {
+            if (onPlayWithFriend && (e.key === 'Enter' || e.key === ' ')) onPlayWithFriend();
+          }}
+          className={`group relative flex flex-col justify-between p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-purple-950/60 to-slate-900/80 border-2 ${
+            onPlayWithFriend
+              ? 'border-purple-400/50 hover:border-purple-400 shadow-[0_0_25px_rgba(168,85,247,0.2)] hover:shadow-[0_0_35px_rgba(168,85,247,0.4)] cursor-pointer transform hover:-translate-y-1 active:scale-[0.98]'
+              : 'border-white/10 opacity-70 cursor-not-allowed'
+          } transition-all duration-200 backdrop-blur-md`}
+        >
+          <div
+            className={`absolute top-4 right-4 px-2.5 py-0.5 rounded-full ${
+              onPlayWithFriend
+                ? 'bg-purple-500/20 border border-purple-400/50 text-purple-300'
+                : 'bg-white/10 border border-white/20 text-slate-400'
+            } text-[10px] font-black tracking-wider uppercase`}
+          >
+            {onPlayWithFriend ? 'LIVE MULTIPLAYER' : 'COMING SOON'}
           </div>
 
           <div>
-            <div className="w-14 h-14 rounded-xl bg-slate-800/80 border border-white/10 flex items-center justify-center text-3xl text-slate-400 mb-4">
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-3xl shadow-lg shadow-purple-500/30 mb-4 group-hover:scale-105 transition-transform">
               👥
             </div>
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-300">
+            <h2 className="text-2xl sm:text-3xl font-black text-white group-hover:text-purple-300 transition-colors">
               Play with Friend
             </h2>
-            <p className="text-slate-400 text-sm mt-2 leading-relaxed">
+            <p className="text-slate-300 text-sm mt-2 leading-relaxed">
               Create a custom match room, share your 6-letter room code, and battle your friends live across devices.
             </p>
           </div>
 
           <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
-            <span className="text-xs font-bold text-slate-500 tracking-wide uppercase">Multiplayer • Room Codes</span>
-            <span className="px-3.5 py-1.5 rounded-xl bg-slate-800 text-slate-400 font-bold text-xs tracking-wider uppercase border border-white/10">
-              LOCKED
+            <span className="text-xs font-bold text-purple-300 tracking-wide uppercase">
+              Head-to-Head • Dual Socket
             </span>
+            {onPlayWithFriend ? (
+              <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-sm tracking-wide shadow-md group-hover:brightness-110">
+                PLAY NOW <span className="text-base font-black">→</span>
+              </span>
+            ) : (
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                Coming Soon
+              </span>
+            )}
           </div>
         </div>
       </main>

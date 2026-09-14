@@ -10,6 +10,7 @@ interface TossScreenProps {
   onChooseToss: (decision: 'BAT' | 'BOWL') => void;
   onProceed?: () => void;
   isLoading?: boolean;
+  isFriendMode?: boolean;
 }
 
 export const TossScreen: React.FC<TossScreenProps> = ({
@@ -20,6 +21,7 @@ export const TossScreen: React.FC<TossScreenProps> = ({
   onChooseToss,
   onProceed,
   isLoading = false,
+  isFriendMode = false,
 }) => {
   // Coin animation state: flips for at least 2.2 seconds before showing result
   const [isFlipping, setIsFlipping] = useState<boolean>(true);
@@ -41,15 +43,15 @@ export const TossScreen: React.FC<TossScreenProps> = ({
     return () => window.clearTimeout(flipTimer);
   }, []);
 
-  // If computer won, automatically proceed after showing their decision for 2.5 seconds
+  // If computer won (in Computer Mode), automatically proceed after showing their decision for 2.5 seconds
   useEffect(() => {
-    if (animationCompleted && tossWinner === 'computer' && onProceed) {
+    if (!isFriendMode && animationCompleted && tossWinner === 'computer' && onProceed) {
       const autoProceedTimer = window.setTimeout(() => {
         onProceed();
       }, 2500);
       return () => window.clearTimeout(autoProceedTimer);
     }
-  }, [animationCompleted, tossWinner, onProceed]);
+  }, [animationCompleted, tossWinner, onProceed, isFriendMode]);
 
   const userTeamName = userTeam?.name?.toUpperCase() || 'INDIA';
   const userTeamId = userTeam?.id || 'IND';
@@ -115,7 +117,7 @@ export const TossScreen: React.FC<TossScreenProps> = ({
           >
             <div className="text-center sm:text-right">
               <span className="inline-block px-2 py-0.5 rounded-full bg-sky-400 text-slate-950 text-[9px] sm:text-xs font-black tracking-widest uppercase">
-                COMPUTER
+                {isFriendMode ? 'OPPONENT' : 'COMPUTER'}
               </span>
               <h3 className="text-xs sm:text-2xl font-black tracking-wide text-white drop-shadow-md mt-0.5 truncate max-w-[110px] sm:max-w-none">
                 {oppTeamName}
@@ -220,39 +222,54 @@ export const TossScreen: React.FC<TossScreenProps> = ({
                 </div>
               </div>
             ) : (
-              /* Computer Won the Toss */
+              /* Opponent / Computer Won the Toss */
               <div className="p-5 sm:p-7 rounded-3xl bg-slate-950/80 border-2 border-sky-400 shadow-[0_0_40px_rgba(56,189,248,0.3)] backdrop-blur-md text-center">
                 <div className="inline-block px-3.5 py-1 rounded-full bg-sky-500/20 border border-sky-400/50 text-sky-300 font-black text-xs sm:text-sm uppercase tracking-widest mb-2">
                   OPPONENT DECISION
                 </div>
                 <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight drop-shadow-md">
-                  COMPUTER WON THE TOSS
+                  {isFriendMode ? 'OPPONENT WON THE TOSS' : 'COMPUTER WON THE TOSS'}
                 </h2>
 
-                <div className="mt-3 py-3 px-5 rounded-2xl bg-black/40 border border-white/10 inline-block">
-                  <span className="text-xs text-slate-300 uppercase tracking-wider block font-bold">
-                    Computer elected to:
-                  </span>
-                  <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-wide mt-0.5 block">
-                    {tossDecision === 'BAT' ? 'BAT FIRST 🏏' : 'BOWL FIRST 🎯'}
-                  </span>
-                </div>
+                {isFriendMode && !tossDecision ? (
+                  <div className="mt-4 py-4 px-6 rounded-2xl bg-black/40 border border-white/10 inline-block">
+                    <span className="text-xs text-slate-300 uppercase tracking-wider block font-bold">
+                      Waiting for opponent's decision...
+                    </span>
+                    <div className="flex items-center justify-center gap-2 mt-3 text-xs text-amber-300 font-bold animate-pulse">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      <span>Opponent is choosing to bat or bowl</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="mt-3 py-3 px-5 rounded-2xl bg-black/40 border border-white/10 inline-block">
+                      <span className="text-xs text-slate-300 uppercase tracking-wider block font-bold">
+                        {isFriendMode ? 'Opponent elected to:' : 'Computer elected to:'}
+                      </span>
+                      <span className="text-2xl sm:text-3xl font-black text-amber-400 tracking-wide mt-0.5 block">
+                        {tossDecision === 'BAT' ? 'BAT FIRST 🏏' : 'BOWL FIRST 🎯'}
+                      </span>
+                    </div>
 
-                <p className="text-xs sm:text-sm font-semibold text-slate-200 mt-3">
-                  {tossDecision === 'BAT'
-                    ? 'You will bowl first. Prepare to select your opening bowler!'
-                    : 'You will bat first. Entering the pitch now!'}
-                </p>
+                    <p className="text-xs sm:text-sm font-semibold text-slate-200 mt-3">
+                      {tossDecision === 'BAT'
+                        ? 'You will bowl first. Prepare to select your opening bowler!'
+                        : 'You will bat first. Entering the pitch now!'}
+                    </p>
 
-                {/* Progress bar or click to proceed */}
-                <div className="mt-4 flex items-center justify-center gap-3">
-                  <button
-                    onClick={() => onProceed && onProceed()}
-                    className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm tracking-wider uppercase shadow-lg transition-all transform hover:scale-105 active:scale-95"
-                  >
-                    CONTINUE TO MATCH →
-                  </button>
-                </div>
+                    {!isFriendMode && (
+                      <div className="mt-4 flex items-center justify-center gap-3">
+                        <button
+                          onClick={() => onProceed && onProceed()}
+                          className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 font-black text-xs sm:text-sm tracking-wider uppercase shadow-lg transition-all transform hover:scale-105 active:scale-95"
+                        >
+                          CONTINUE TO MATCH →
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

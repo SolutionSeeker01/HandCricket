@@ -6,6 +6,7 @@ interface HeaderProps {
   onOpenSettings: () => void;
   isMuted?: boolean;
   onToggleMute?: () => void;
+  modeLabel?: string;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -13,10 +14,11 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenSettings,
   isMuted = false,
   onToggleMute,
+  modeLabel = 'vs Computer',
 }) => {
-  const overs = matchState ? `${matchState.overs} / ${matchState.max_overs}` : '0.0 / 5';
-  const score = matchState ? `${matchState.score} / ${matchState.wickets}` : '0 / 0';
-  const target = matchState?.target;
+  const isSecondInnings = matchState?.innings === 2 || matchState?.status === 'INNINGS_2';
+  const target = isSecondInnings ? matchState?.target : null;
+  const showTarget = target !== null && target !== undefined;
 
   return (
     <header className="w-full flex items-center justify-between px-2 py-1.5 sm:px-6 sm:py-3 z-30">
@@ -36,40 +38,20 @@ export const Header: React.FC<HeaderProps> = ({
         </span>
       </div>
 
-      {/* Central Over & Score Status Pills */}
-      <div className="flex items-center space-x-1.5 sm:space-x-3">
-        {/* Over Pill */}
-        <div className="flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-2 py-0.5 sm:px-4 sm:py-1.5 shadow-lg min-w-[55px] sm:min-w-[75px]">
-          <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-300">
-            Over
+      {/* Target Pill (shown only during Second Innings chase) */}
+      {showTarget && (
+        <div
+          data-testid="header-target-pill"
+          className="flex flex-col items-center justify-center bg-emerald-950/80 backdrop-blur-md border border-emerald-500/50 rounded-2xl px-2.5 py-0.5 sm:px-4 sm:py-1.5 shadow-lg min-w-[55px] sm:min-w-[75px]"
+        >
+          <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider text-emerald-300">
+            Target
           </span>
-          <span className="text-[11px] sm:text-sm font-black text-white tracking-wide">
-            {overs}
-          </span>
-        </div>
-
-        {/* Score Pill */}
-        <div className="flex flex-col items-center justify-center bg-slate-900/80 backdrop-blur-md border border-slate-700/60 rounded-2xl px-2 py-0.5 sm:px-4 sm:py-1.5 shadow-lg min-w-[55px] sm:min-w-[75px]">
-          <span className="text-[8px] sm:text-[10px] uppercase font-bold tracking-wider text-slate-300">
-            Score
-          </span>
-          <span className="text-[11px] sm:text-sm font-black text-amber-400 tracking-wide">
-            {score}
+          <span className="text-[11px] sm:text-sm font-black text-emerald-300 tracking-wide">
+            {target}
           </span>
         </div>
-
-        {/* Target Pill (when applicable in Innings 2) */}
-        {target !== null && target !== undefined && (
-          <div className="hidden sm:flex flex-col items-center justify-center bg-emerald-950/80 backdrop-blur-md border border-emerald-500/50 rounded-2xl px-3 py-1 sm:px-4 sm:py-1.5 shadow-lg">
-            <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider text-emerald-300">
-              Target
-            </span>
-            <span className="text-xs sm:text-sm font-black text-emerald-300 tracking-wide">
-              {target}
-            </span>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Right: Mode Badge & Settings */}
       <div className="flex items-center space-x-2 sm:space-x-3">
@@ -82,7 +64,7 @@ export const Header: React.FC<HeaderProps> = ({
             <line x1="8" y1="16" x2="8" y2="16" strokeWidth="3" />
             <line x1="16" y1="16" x2="16" y2="16" strokeWidth="3" />
           </svg>
-          <span>vs Computer</span>
+          <span>{modeLabel}</span>
         </div>
 
         {/* Audio Mute/Unmute Toggle Button */}

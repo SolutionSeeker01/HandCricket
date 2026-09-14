@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { BowlerPickerModal } from './components/BowlerPickerModal';
+import { FriendArena } from './components/FriendArena';
+import { FriendLobbyModal } from './components/FriendLobbyModal';
 import { Header } from './components/Header';
 import { InningsBreakModal } from './components/InningsBreakModal';
 import { IntroScreen } from './components/IntroScreen';
@@ -44,6 +46,46 @@ export default function App() {
   } = useCricketGame();
 
   const [showSettings, setShowSettings] = useState<boolean>(false);
+  const [showFriendLobby, setShowFriendLobby] = useState<boolean>(false);
+  const [friendSession, setFriendSession] = useState<{
+    roomCode: string;
+    token: string;
+    participant: 'A' | 'B';
+  } | null>(() => {
+    try {
+      const stored = sessionStorage.getItem('hc_friend_session');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleEnterFriendRoom = (roomCode: string, token: string, participant: 'A' | 'B') => {
+    const session = { roomCode, token, participant };
+    try {
+      sessionStorage.setItem('hc_friend_session', JSON.stringify(session));
+    } catch {}
+    setFriendSession(session);
+  };
+
+  const handleExitFriendRoom = () => {
+    try {
+      sessionStorage.removeItem('hc_friend_session');
+    } catch {}
+    setFriendSession(null);
+  };
+
+  // If in active Friend Mode session, display FriendArena
+  if (friendSession) {
+    return (
+      <FriendArena
+        roomCode={friendSession.roomCode}
+        playerToken={friendSession.token}
+        participantSeat={friendSession.participant}
+        onExit={handleExitFriendRoom}
+      />
+    );
+  }
 
   // 1. Connection Error Screen
   if (connectionStatus === 'error' && !matchState && !preMatchState) {
@@ -71,7 +113,22 @@ export default function App() {
 
   // 3. Landing Screen
   if (appStage === 'LANDING') {
-    return <LandingScreen onPlayVsComputer={startVsComputer} />;
+    return (
+      <>
+        <LandingScreen
+          onPlayVsComputer={startVsComputer}
+          onPlayWithFriend={() => setShowFriendLobby(true)}
+        />
+        <FriendLobbyModal
+          isOpen={showFriendLobby}
+          onClose={() => setShowFriendLobby(false)}
+          onEnterRoom={(roomCode, token, participant) => {
+            setShowFriendLobby(false);
+            handleEnterFriendRoom(roomCode, token, participant);
+          }}
+        />
+      </>
+    );
   }
 
   // 4. Pre-Match Stage Flows

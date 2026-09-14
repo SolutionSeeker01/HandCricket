@@ -4,11 +4,19 @@ import { MatchState } from '../types';
 interface MatchResultModalProps {
   matchState: MatchState;
   onPlayAgain: () => void;
+  onExit?: () => void;
+  isFriendMode?: boolean;
+  isRematchRequested?: boolean;
+  opponentWantsRematch?: boolean;
 }
 
 export const MatchResultModal: React.FC<MatchResultModalProps> = ({
   matchState,
   onPlayAgain,
+  onExit,
+  isFriendMode = false,
+  isRematchRequested = false,
+  opponentWantsRematch = false,
 }) => {
   if (matchState.status !== 'COMPLETED') {
     return null;
@@ -53,22 +61,32 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
           <div className="flex flex-col items-center">
             <span className="text-4xl mb-1">🤝</span>
             <h2 className="text-3xl sm:text-4xl font-black italic tracking-wide text-sky-300 drop-shadow">
-              It's a Tie!
+              {isFriendMode ? 'MATCH TIED!' : "It's a Tie!"}
             </h2>
           </div>
         ) : isUserWinner ? (
           <div className="flex flex-col items-center">
             <span className="text-4xl mb-1 animate-bounce">🏆</span>
             <h2 className="text-3xl sm:text-4xl font-black italic tracking-wide text-amber-400 drop-shadow">
-              {user_team.name} Win!
+              {isFriendMode ? 'YOU WON!' : `${user_team.name} Win!`}
             </h2>
+            {isFriendMode && (
+              <p className="text-xs font-bold text-amber-200 uppercase tracking-widest mt-1">
+                {user_team.name}
+              </p>
+            )}
           </div>
         ) : (
           <div className="flex flex-col items-center">
             <span className="text-4xl mb-1">🏏</span>
             <h2 className="text-3xl sm:text-4xl font-black italic tracking-wide text-slate-100 drop-shadow">
-              {opponent_team.name} Win!
+              {isFriendMode ? 'YOU LOST!' : `${opponent_team.name} Win!`}
             </h2>
+            {isFriendMode && (
+              <p className="text-xs font-bold text-slate-300 uppercase tracking-widest mt-1">
+                {opponent_team.name}
+              </p>
+            )}
           </div>
         )}
 
@@ -106,26 +124,82 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
           </div>
         </div>
 
-        {/* Play Again Button */}
-        <button
-          onClick={onPlayAgain}
-          className="w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/30 transition-all flex items-center justify-center space-x-2"
-        >
-          <svg
-            className="w-5 h-5 text-slate-950"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+        {/* Opponent Rematch Notification Badge */}
+        {isFriendMode && opponentWantsRematch && !isRematchRequested && (
+          <div
+            data-testid="opponent-rematch-badge"
+            className="mb-3 px-4 py-1.5 rounded-full bg-emerald-500/20 border border-emerald-400 text-emerald-300 font-extrabold text-xs sm:text-sm animate-pulse flex items-center gap-1.5"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-            />
-          </svg>
-          <span>Play Again</span>
-        </button>
+            <span>🏏</span>
+            <span>Opponent wants a rematch!</span>
+          </div>
+        )}
+
+        {/* Buttons */}
+        {isFriendMode ? (
+          <div className="w-full flex flex-col gap-2.5">
+            <button
+              onClick={onPlayAgain}
+              disabled={isRematchRequested}
+              className={`w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase transition-all flex items-center justify-center space-x-2 ${
+                isRematchRequested
+                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600 animate-pulse'
+                  : 'text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/30 cursor-pointer'
+              }`}
+            >
+              {isRematchRequested ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block mr-1" />
+                  <span>Waiting for Opponent...</span>
+                </>
+              ) : (
+                <>
+                  <svg
+                    className="w-5 h-5 text-slate-950"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2.5}
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  <span>Play Again</span>
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={onExit ?? onPlayAgain}
+              className="w-full py-3 px-6 rounded-2xl font-bold text-sm tracking-wider uppercase text-slate-300 bg-slate-800/80 hover:bg-slate-700 hover:text-white border border-slate-700 transition-all cursor-pointer"
+            >
+              Return to Main Menu
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={onPlayAgain}
+            className="w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/30 transition-all flex items-center justify-center space-x-2 cursor-pointer"
+          >
+            <svg
+              className="w-5 h-5 text-slate-950"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2.5}
+                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              />
+            </svg>
+            <span>Play Again</span>
+          </button>
+        )}
       </div>
     </div>
   );

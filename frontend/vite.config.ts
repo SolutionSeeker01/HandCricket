@@ -11,6 +11,14 @@ export default defineConfig({
       '/ws': {
         target: 'ws://localhost:8000',
         ws: true,
+        configure: (proxy) => {
+          proxy.on('error', (err) => {
+            // Ignore connection resets and aborts when browser tabs close or reload
+            if ((err as any).code === 'ECONNABORTED' || (err as any).code === 'ECONNRESET') {
+              return;
+            }
+          });
+        },
       },
     },
   },

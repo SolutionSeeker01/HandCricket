@@ -3,6 +3,7 @@ import { MatchState } from '../types';
 
 interface ScoreboardProps {
   matchState: MatchState | null;
+  opponentLabel?: string;
 }
 
 // 1. CIRCULAR SVG TEAM FLAGS (IND & AUS + Fallback)
@@ -105,26 +106,27 @@ const SouthAfricaFlag: React.FC = () => (
   </svg>
 );
 
-const TeamFlagBadge: React.FC<{ id: string; name: string }> = ({ id }) => {
+const TeamFlagBadge: React.FC<{ id?: string; name?: string }> = ({ id = '' }) => {
   if (id === 'IND') return <IndiaFlag />;
   if (id === 'AUS') return <AustraliaFlag />;
   if (id === 'ENG') return <EnglandFlag />;
   if (id === 'SA') return <SouthAfricaFlag />;
   return (
     <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-full bg-gradient-to-br from-blue-600 to-indigo-800 border-2 border-white/20 flex items-center justify-center font-black text-xs text-white shadow-md shrink-0">
-      {id.slice(0, 3)}
+      {id ? id.slice(0, 3) : '🏏'}
     </div>
   );
 };
 
-export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
+export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState, opponentLabel }) => {
   if (!matchState) {
     return null;
   }
 
+  const user_team = matchState.user_team || { id: 'IND', name: 'India' };
+  const opponent_team = matchState.opponent_team || { id: 'AUS', name: 'Australia' };
+
   const {
-    user_team,
-    opponent_team,
     user_is_batting,
     score,
     wickets,
@@ -296,7 +298,7 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState }) => {
                   >
                     {!user_is_batting ? 'Batting' : 'Bowling'}
                   </span>
-                  <span className="text-[10px] text-slate-300 font-semibold">Comp</span>
+                  <span className="text-[10px] text-slate-300 font-semibold">{opponentLabel ?? 'Comp'}</span>
                 </div>
               </div>
               <TeamFlagBadge id={opponent_team.id} name={opponent_team.name} />

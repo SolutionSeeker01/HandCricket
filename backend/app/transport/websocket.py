@@ -21,6 +21,7 @@ from backend.app.protocol.messages import (
     parse_client_message,
     serialize_error,
 )
+from backend.app.protocol.room import RoomStage
 from backend.app.protocol.session import TurnSession
 
 # Module-level standalone session for single-endpoint testing without a room manager
@@ -214,4 +215,118 @@ async def handle_computer_game_websocket(
         pass
     finally:
         await session.unregister_connection(websocket)
+
+
+async def handle_friend_game_websocket(
+    websocket: WebSocket,
+    room_code: str,
+    token: str,
+) -> None:
+    """Handle a client connection playing in Friend Mode (Slice 15B).
+
+    Execution flow:
+    1. Accepts the WebSocket connection.
+    2. Looks up the room and validates player token.
+    3. Registers connection with the room's FriendGameSession.
+    4. Listens for incoming client messages (select_team, choose_toss, select_bowler, ping).
+    5. Disconnects cleanly when connection drops.
+    """
+    import json
+    from backend.app.protocol.room_manager import get_room_manager
+
+    await websocket.accept()
+
+    room_manager = get_room_manager()
+    room = await room_manager.get_room(room_code)
+    if room is None:
+        await websocket.send_json(
+            serialize_error("room_not_found", f"Room {room_code.upper()} not found.")
+        )
+        await websocket.close(code=4004)
+        return
+
+    if room.stage in (RoomStage.ABANDONED, RoomStage.CLOSED):
+        await websocket.send_json(
+            serialize_error("room_abandoned", f"Room {room_code.upper()} has been abandoned or closed.")
+        )
+        await websocket.close(code=4004)
+        return
+
+    participant = room.get_participant_by_token(token)
+    if participant is None:
+        await websocket.send_json(
+            serialize_error("invalid_token", "Invalid player token.")
+        )
+        await websocket.close(code=4003)
+        return
+
+    session = room.get_or_create_session()
+
+    try:
+        await session.register_connection(participant, websocket)
+    except Exception as err:
+        await websocket.send_json(serialize_error("session_error", str(err)))
+        await websocket.close()
+        return
+
+    try:
+        while True:
+            raw_text = await websocket.receive_text()
+
+            # Transport smoke ping backward compatibility
+            if raw_text == "ping":
+                await websocket.send_text("pong")
+                continue
+
+            try:
+                try:
+                    payload = json.loads(raw_text)
+                except Exception:
+                    raise TurnProtocolError("malformed_json", "Message must be valid JSON.")
+
+                if not isinstance(payload, dict):
+                    raise TurnProtocolError("non_object_json", "Payload must be a JSON object.")
+
+                msg_type = payload.get("type")
+                if msg_type == "submit_number":
+                    msg = parse_client_message(raw_text)
+                    await session.submit_number(
+                        participant, msg["number"], turn_id=msg.get("turn_id")
+                    )
+                elif msg_type == "start_innings_2":
+                    await session.start_next_innings(participant)
+                elif msg_type == "select_team":
+                    msg = parse_client_message(raw_text)
+                    await session.select_team(participant, msg["team_id"])
+                elif msg_type in ("choose_toss", "toss_decision"):
+                    decision = payload.get("decision")
+                    if not isinstance(decision, str) or decision.strip().upper() not in ("BAT", "BOWL"):
+                        raise TurnProtocolError(
+                            "invalid_decision", "Field 'decision' must be 'BAT' or 'BOWL'."
+                        )
+                    await session.choose_toss(participant, decision)
+                elif msg_type == "select_bowler":
+                    msg = parse_client_message(raw_text)
+                    await session.select_bowler(participant, msg["bowler_id"])
+                elif msg_type in ("request_rematch", "play_again"):
+                    await session.request_rematch(participant)
+                elif msg_type in ("leave_room", "exit_room"):
+                    await session.leave_room(participant)
+                elif msg_type in ("sync_state", "refresh_state"):
+                    sync_data = session.get_sync_state_dict(participant)
+                    await websocket.send_json(sync_data)
+                else:
+                    raise TurnProtocolError(
+                        "unknown_message_type", f"Unknown message type: {msg_type!r}."
+                    )
+            except TurnProtocolError as err:
+                await websocket.send_json(serialize_error(err.code, err.message))
+            except Exception as err:
+                await websocket.send_json(serialize_error("internal_error", str(err)))
+
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        await session.unregister_connection(participant, websocket)
+
 
