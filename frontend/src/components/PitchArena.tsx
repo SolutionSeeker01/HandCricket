@@ -8,6 +8,8 @@ interface PitchArenaProps {
   eventFeedback: EventFeedback | null;
   milestoneFeedback?: MilestoneFeedback | null;
   turnCountdown?: TurnCountdown | null;
+  waitingTitle?: string;
+  waitingSubtitle?: string;
   onSelectNumber: (num: number) => void;
 }
 
@@ -18,6 +20,8 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
   eventFeedback,
   milestoneFeedback,
   turnCountdown,
+  waitingTitle,
+  waitingSubtitle,
   onSelectNumber,
 }) => {
   const userIsBatting = matchState ? matchState.user_is_batting : true;
@@ -192,10 +196,12 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
           </div>
         )}
 
-        {isWaiting ? (
+        {eventFeedback || milestoneFeedback ? (
+          <div className="h-[72px] sm:h-[88px] flex items-center justify-center pointer-events-none" aria-hidden="true" />
+        ) : isWaiting ? (
           <div className="flex flex-col items-center text-center">
             <h2 className="text-3xl sm:text-5xl font-black uppercase italic tracking-wide text-amber-400 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] font-sans">
-              WAITING FOR OPPONENT
+              {waitingTitle || 'WAITING FOR OPPONENT'}
             </h2>
             <svg
               className="w-48 sm:w-64 h-3.5 text-amber-400 -mt-0.5 mb-1"
@@ -211,7 +217,7 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
             </svg>
             <p className="text-xs sm:text-sm font-bold text-slate-200 drop-shadow flex items-center justify-center space-x-1.5 mt-0.5">
               <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block mr-1.5" />
-              <span>Resolving delivery...</span>
+              <span>{waitingSubtitle || 'Resolving delivery...'}</span>
             </p>
           </div>
         ) : (

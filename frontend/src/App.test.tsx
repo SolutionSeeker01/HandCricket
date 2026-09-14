@@ -44,13 +44,13 @@ const mockMatchState: MatchState = {
 };
 
 describe('Slice 12 Frontend Component Tests', () => {
-  it('Header renders branding, over, and score pills correctly', () => {
+  it('Header renders branding and does not render duplicate over/score pills in first innings', () => {
     render(<Header matchState={mockMatchState} onOpenSettings={vi.fn()} />);
 
     expect(screen.getByText('Hand')).toBeDefined();
     expect(screen.getByText('Cricket')).toBeDefined();
-    expect(screen.getByText('2.3 / 5')).toBeDefined();
-    expect(screen.getByText('27 / 1')).toBeDefined();
+    expect(screen.queryByText('Over')).toBeNull();
+    expect(screen.queryByText('Score')).toBeNull();
   });
 
   it('Header renders target pill when target is present in Innings 2', () => {
@@ -62,6 +62,8 @@ describe('Slice 12 Frontend Component Tests', () => {
     };
     render(<Header matchState={chasingState} onOpenSettings={vi.fn()} />);
     expect(screen.getByText('63')).toBeDefined();
+    expect(screen.queryByText('Over')).toBeNull();
+    expect(screen.queryByText('Score')).toBeNull();
   });
 
   it('Scoreboard renders teams, score, batters, bowler, and over ball dots', () => {

@@ -4,11 +4,13 @@ import { MatchState } from '../types';
 interface InningsBreakModalProps {
   matchState: MatchState;
   onStartNextInnings: () => void;
+  isWaitingOpponent?: boolean;
 }
 
 export const InningsBreakModal: React.FC<InningsBreakModalProps> = ({
   matchState,
   onStartNextInnings,
+  isWaitingOpponent = false,
 }) => {
   if (matchState.status !== 'INNINGS_BREAK') {
     return null;
@@ -66,22 +68,36 @@ export const InningsBreakModal: React.FC<InningsBreakModalProps> = ({
         {/* Next Innings Primary Button */}
         <button
           onClick={onStartNextInnings}
-          className="w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/25 transition-all flex items-center justify-center space-x-2"
+          disabled={isWaitingOpponent}
+          className={`w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase transition-all flex items-center justify-center space-x-2 ${
+            isWaitingOpponent
+              ? 'bg-slate-700 text-slate-400 cursor-not-allowed border border-slate-600 animate-pulse'
+              : 'text-slate-950 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/25'
+          }`}
         >
-          <span>Next Innings</span>
-          <svg
-            className="w-5 h-5 text-slate-950"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={3}
-              d="M13 7l5 5m0 0l-5 5m5-5H6"
-            />
-          </svg>
+          {isWaitingOpponent ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping inline-block mr-1" />
+              <span>Waiting for Opponent...</span>
+            </>
+          ) : (
+            <>
+              <span>Next Innings</span>
+              <svg
+                className="w-5 h-5 text-slate-950"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={3}
+                  d="M13 7l5 5m0 0l-5 5m5-5H6"
+                />
+              </svg>
+            </>
+          )}
         </button>
       </div>
     </div>

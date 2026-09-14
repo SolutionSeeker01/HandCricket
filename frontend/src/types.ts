@@ -62,6 +62,8 @@ export interface MatchState {
   is_tie: boolean;
   result_description: string | null;
   turn_id?: number;
+  batting_participant?: string;
+  bowling_participant?: string;
 }
 
 export interface EventFeedback {
