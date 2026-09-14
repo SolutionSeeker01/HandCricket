@@ -878,5 +878,102 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
 
       expect(screen.getByText('YOU LOST!')).toBeDefined();
     });
+
+    it('disambiguates same-team matchup in MatchResultModal using user_won', () => {
+      const sameTeamWinState: MatchState = {
+        ...dummyMatchState,
+        status: 'COMPLETED',
+        winner: 'India',
+        user_won: true,
+        user_team: { id: 'IND', name: 'India' },
+        opponent_team: { id: 'IND', name: 'India' },
+        result_description: 'India won by 15 runs',
+      };
+
+      const { rerender } = render(
+        <MatchResultModal
+          matchState={sameTeamWinState}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      expect(screen.getByText('YOU WON!')).toBeDefined();
+
+      const sameTeamLossState: MatchState = {
+        ...sameTeamWinState,
+        user_won: false,
+      };
+
+      rerender(
+        <MatchResultModal
+          matchState={sameTeamLossState}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      expect(screen.getByText('YOU LOST!')).toBeDefined();
+    });
+
+    it('renders Match Abandoned screen when room is abandoned', async () => {
+      const handleExit = vi.fn();
+      render(
+        <FriendArena
+          roomCode="ABAN99"
+          playerToken="tokA"
+          participantSeat="A"
+          onExit={handleExit}
+        />
+      );
+
+      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      await act(async () => {
+        currentWs.triggerMessage({
+          type: 'room_abandoned',
+          room_code: 'ABAN99',
+          stage: 'ABANDONED',
+          reason: 'Player B disconnected and did not return.',
+        });
+      });
+
+      expect(screen.getByText('Match Abandoned')).toBeDefined();
+      expect(screen.getByText('Player B disconnected and did not return.')).toBeDefined();
+
+      const exitBtn = screen.getByText('Return to Main Menu');
+      fireEvent.click(exitBtn);
+      expect(handleExit).toHaveBeenCalledTimes(1);
+    });
+
+    it('reconstructs userTeam and opponentTeam on sync_state during TOSS_DECISION', async () => {
+      render(
+        <FriendArena
+          roomCode="TOSS99"
+          playerToken="tokA"
+          participantSeat="A"
+          onExit={vi.fn()}
+        />
+      );
+
+      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      await act(async () => {
+        currentWs.triggerMessage({
+          type: 'sync_state',
+          participant: 'A',
+          stage: 'TOSS_DECISION',
+          team_a: 'IND',
+          team_b: 'AUS',
+          team_a_name: 'India',
+          team_b_name: 'Australia',
+          toss_winner: 'A',
+          match_state: {},
+        });
+      });
+
+      // TossScreen should be visible with reconstructed India vs Australia
+      expect(screen.getAllByText(/TOSS/i).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText('INDIA')).toBeDefined();
+      expect(screen.getByText('AUSTRALIA')).toBeDefined();
+    });
   });
 });

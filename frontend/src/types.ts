@@ -59,6 +59,9 @@ export interface MatchState {
   innings_2_wickets: number | null;
   last_ball: LastBallInfo | null;
   winner: string | null;
+  winner_side?: number | null;
+  winner_participant?: string | null;
+  user_won?: boolean;
   is_tie: boolean;
   result_description: string | null;
   turn_id?: number;

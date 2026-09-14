@@ -35,8 +35,12 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
     innings_2_wickets,
   } = matchState;
 
-  const isUserWinner = winner === user_team.name;
-  const isOpponentWinner = winner === opponent_team.name;
+  const isUserWinner = !is_tie && (
+    matchState.user_won !== undefined
+      ? Boolean(matchState.user_won)
+      : (winner === user_team.name)
+  );
+  const isOpponentWinner = !is_tie && !isUserWinner;
 
   const userBattedFirst = user_batted_first ?? true;
   const innings1Team = userBattedFirst ? user_team : opponent_team;

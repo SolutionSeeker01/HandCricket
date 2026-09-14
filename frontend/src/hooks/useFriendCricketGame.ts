@@ -220,6 +220,18 @@ export function useFriendCricketGame({
         if (msg.match_state?.user_team) {
           setUserTeam(msg.match_state.user_team);
           userTeamRef.current = msg.match_state.user_team;
+        } else if (msg.team_a && msg.team_b) {
+          const isA = currPart === 'A';
+          const uTeam = isA
+            ? { id: msg.team_a, name: msg.team_a_name || msg.team_a }
+            : { id: msg.team_b, name: msg.team_b_name || msg.team_b };
+          const oTeam = isA
+            ? { id: msg.team_b, name: msg.team_b_name || msg.team_b }
+            : { id: msg.team_a, name: msg.team_a_name || msg.team_a };
+          setUserTeam(uTeam);
+          userTeamRef.current = uTeam;
+          setOpponentTeam(oTeam);
+          opponentTeamRef.current = oTeam;
         }
         if (msg.match_state?.opponent_team) {
           setOpponentTeam(msg.match_state.opponent_team);
@@ -564,8 +576,14 @@ export function useFriendCricketGame({
         stopCountdown();
         setStage('MATCH_COMPLETED');
         const currUName = userTeamRef.current?.name ?? userTeam?.name;
-        const userWon = (currPart && msg.winner === currPart) ||
-                        (currUName && msg.winner === currUName);
+        const userWon = !msg.is_tie && (
+          msg.winner_participant !== undefined
+            ? (currPart && msg.winner_participant === currPart)
+            : (msg.match_state?.user_won !== undefined
+              ? Boolean(msg.match_state.user_won)
+              : ((currPart && msg.winner === currPart) ||
+                 (currUName && msg.winner === currUName)))
+        );
         if (userWon) {
           soundManager.playMatchWin();
         } else if (!msg.is_tie) {

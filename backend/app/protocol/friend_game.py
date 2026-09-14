@@ -38,6 +38,7 @@ class FriendGameSession:
         disconnect_grace_seconds: float = 60.0,
     ) -> None:
         self._room: FriendGameRoom = room
+        self._toss_chooser: Optional[Any] = toss_chooser
         self._pre_match: PreMatchSetup = PreMatchSetup(toss_chooser=toss_chooser)
         self._match: Optional[Match] = None
         self._max_overs: int = max_overs
@@ -45,6 +46,7 @@ class FriendGameSession:
         self._timeout_seconds: float = timeout_seconds
         self._disconnect_grace_seconds: float = disconnect_grace_seconds
         self._disconnect_grace_tasks: Dict[Participant, asyncio.Task] = {}
+        self._paused_turn_remaining_seconds: Optional[float] = None
 
         self._lock: asyncio.Lock = asyncio.Lock()
         self._sockets: Dict[Participant, WebSocket] = {}
@@ -178,6 +180,23 @@ class FriendGameSession:
                 if not task.done():
                     task.cancel()
 
+            # Resume paused turn countdown if active match was paused by disconnect
+            if (
+                self._room.stage == RoomStage.IN_MATCH
+                and self._current_turn is not None
+                and not self._current_turn.is_resolved
+                and self._paused_turn_remaining_seconds is not None
+            ):
+                now = time.monotonic()
+                resumed_seconds = max(3.0, self._paused_turn_remaining_seconds)
+                self._current_turn.deadline = now + resumed_seconds
+                self._paused_turn_remaining_seconds = None
+                if self._timeout_task and not self._timeout_task.done():
+                    self._timeout_task.cancel()
+                self._timeout_task = asyncio.create_task(
+                    self._turn_timeout_worker(self._current_turn.turn_id, self._current_turn.deadline)
+                )
+
             slot = (
                 self._room.slot_a
                 if participant == Participant.A
@@ -294,6 +313,17 @@ class FriendGameSession:
             )
 
             if opponent_connected:
+                # Pause active delivery turn during disconnect grace so match does not auto-play
+                if (
+                    self._room.stage == RoomStage.IN_MATCH
+                    and self._current_turn is not None
+                    and not self._current_turn.is_resolved
+                ):
+                    if self._timeout_task and not self._timeout_task.done():
+                        self._timeout_task.cancel()
+                        self._timeout_task = None
+                    self._paused_turn_remaining_seconds = max(0.0, self._current_turn.deadline - time.monotonic())
+
                 # Notify opponent of disconnect and grace period
                 await self.send_personal_locked(
                     opponent,
@@ -349,7 +379,7 @@ class FriendGameSession:
             if self._timeout_task and not self._timeout_task.done():
                 self._timeout_task.cancel()
 
-            if self._room.stage in (
+            if self._match is not None and self._room.stage in (
                 RoomStage.IN_MATCH,
                 RoomStage.BOWLER_SELECTION,
                 RoomStage.INNINGS_BREAK,
@@ -367,8 +397,12 @@ class FriendGameSession:
                     f"Player {participant.value} disconnected. Player {opponent.value} won by forfeit."
                 )
 
-                if self._match:
-                    self._match.forfeit(winner=winner_name, description=description)
+                winner_side = 1 if opponent == self._pre_match.batting_first_participant else 2
+                self._match.forfeit(
+                    winner=winner_name,
+                    description=description,
+                    winner_side=winner_side,
+                )
 
                 self._room.stage = RoomStage.MATCH_COMPLETED
 
@@ -380,16 +414,13 @@ class FriendGameSession:
                             "room_code": self._room.room_code,
                             "stage": "MATCH_COMPLETED",
                             "winner": winner_name,
+                            "winner_participant": opponent.value,
                             "is_tie": False,
                             "result_description": description,
                             "match_state": self.get_match_state_dict(opponent),
                         },
                     )
-            elif self._room.stage in (
-                RoomStage.TEAM_SELECTION,
-                RoomStage.TOSS_DECISION,
-                RoomStage.TOSS,
-            ):
+            else:
                 self._room.stage = RoomStage.ABANDONED
                 if opponent_connected:
                     await self.send_personal_locked(
@@ -801,7 +832,7 @@ class FriendGameSession:
             self._is_innings_break = False
 
             # Create fresh PreMatchSetup domain coordinator preserving teams
-            self._pre_match = PreMatchSetup()
+            self._pre_match = PreMatchSetup(toss_chooser=self._toss_chooser)
             if team_a:
                 self._pre_match.select_team(Participant.A, team_a.id)
             if team_b:
@@ -1130,37 +1161,48 @@ class FriendGameSession:
             self._room.stage = RoomStage.BOWLER_SELECTION
 
         # Broadcast ball_result with revealed choices and dismissed player info
-        ball_msg = {
-            "type": "ball_result",
-            "turn_id": turn.turn_id,
-            "batting_participant": batter_part.value,
-            "bowling_participant": bowler_part.value,
-            "batsman_choice": batter_choice,
-            "bowler_choice": bowler_choice,
-            "runs": ball_result.runs,
-            "is_wicket": ball_result.is_wicket,
-            "out_player": out_player_name,
-            "choice_a": turn.choice_a,
-            "choice_b": turn.choice_b,
-            "a_timed_out": turn.a_timed_out,
-            "b_timed_out": turn.b_timed_out,
-            "match_state": self.get_match_state_dict(),
-        }
-        await self.broadcast_locked(ball_msg)
+        for part, ws in list(self._sockets.items()):
+            try:
+                ball_msg = {
+                    "type": "ball_result",
+                    "turn_id": turn.turn_id,
+                    "batting_participant": batter_part.value,
+                    "bowling_participant": bowler_part.value,
+                    "batsman_choice": batter_choice,
+                    "bowler_choice": bowler_choice,
+                    "runs": ball_result.runs,
+                    "is_wicket": ball_result.is_wicket,
+                    "out_player": out_player_name,
+                    "choice_a": turn.choice_a,
+                    "choice_b": turn.choice_b,
+                    "a_timed_out": turn.a_timed_out,
+                    "b_timed_out": turn.b_timed_out,
+                    "match_state": self.get_match_state_dict(part),
+                }
+                await ws.send_json(ball_msg)
+            except Exception as e:
+                logger.warning(f"Failed to send ball_result to {part}: {e}")
 
         # Post-ball progression:
         if match_just_completed:
-            await self.broadcast_locked(
-                {
-                    "type": "match_completed",
-                    "room_code": self._room.room_code,
-                    "stage": "MATCH_COMPLETED",
-                    "winner": self._match.winner,
-                    "is_tie": self._match.is_tie,
-                    "result_description": self._match.result_description,
-                    "match_state": self.get_match_state_dict(),
-                }
-            )
+            winner_part = self._get_winner_participant()
+            for part, ws in list(self._sockets.items()):
+                try:
+                    await ws.send_json(
+                        {
+                            "type": "match_completed",
+                            "room_code": self._room.room_code,
+                            "stage": "MATCH_COMPLETED",
+                            "winner": self._match.winner,
+                            "winner_side": self._match.winner_side,
+                            "winner_participant": winner_part,
+                            "is_tie": self._match.is_tie,
+                            "result_description": self._match.result_description,
+                            "match_state": self.get_match_state_dict(part),
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to send match_completed to {part}: {e}")
             return
 
         if self._is_innings_break:
@@ -1212,6 +1254,27 @@ class FriendGameSession:
 
         # Match continues: start next turn
         await self._start_turn_locked()
+
+    def _get_winner_participant(self) -> Optional[str]:
+        """Determine winner participant seat ('A' or 'B'), or None if tie / not completed."""
+        if not self._match or not self._match.is_completed or self._match.is_tie:
+            return None
+        if self._match.winner_side == 1:
+            return self._pre_match.batting_first_participant.value
+        elif self._match.winner_side == 2:
+            first = self._pre_match.batting_first_participant
+            return Participant.B.value if first == Participant.A else Participant.A.value
+        return None
+
+    def close(self) -> None:
+        """Clean up background tasks on room closure / eviction."""
+        if self._timeout_task and not self._timeout_task.done():
+            self._timeout_task.cancel()
+            self._timeout_task = None
+        for task in list(self._disconnect_grace_tasks.values()):
+            if not task.done():
+                task.cancel()
+        self._disconnect_grace_tasks.clear()
 
     # ---------------------------------------------------------------------------
     # State Serialization Helper
@@ -1351,6 +1414,13 @@ class FriendGameSession:
             user_is_batting = (batting_part == participant)
             user_batted_first = (self._pre_match.batting_first_participant == participant)
 
+        winner_participant = self._get_winner_participant()
+        user_won = (
+            (winner_participant == participant.value)
+            if (participant is not None and winner_participant is not None)
+            else False
+        )
+
         return {
             "status": status_str,
             "innings": innings_num,
@@ -1376,6 +1446,9 @@ class FriendGameSession:
             "target": self._match.target,
             "is_completed": is_completed,
             "winner": self._match.winner,
+            "winner_side": getattr(self._match, "winner_side", None),
+            "winner_participant": winner_participant,
+            "user_won": user_won,
             "is_tie": self._match.is_tie,
             "result_description": self._match.result_description,
             "batting_participant": batting_part.value,
@@ -1549,6 +1622,8 @@ class FriendGameSession:
             # Pre-match context
             "team_a": self._pre_match.team_a.id if self._pre_match.team_a else None,
             "team_b": self._pre_match.team_b.id if self._pre_match.team_b else None,
+            "team_a_name": self._pre_match.team_a.name if self._pre_match.team_a else None,
+            "team_b_name": self._pre_match.team_b.name if self._pre_match.team_b else None,
             "toss_winner": self._pre_match.toss_winner.value if self._pre_match.toss_winner else None,
             "toss_decision": (
                 self._pre_match.toss_result.decision.value

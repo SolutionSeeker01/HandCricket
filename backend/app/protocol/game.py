@@ -568,6 +568,14 @@ class ComputerGameSession:
         else:
             status_str = "INNINGS_2"
 
+        winner_side = getattr(self._match, "winner_side", None)
+        if self._match and self._match.is_completed and not self._match.is_tie:
+            user_won = (winner_side == 1) if self._user_is_batting_first else (winner_side == 2)
+            winner_participant = "user" if user_won else "computer"
+        else:
+            user_won = False
+            winner_participant = None
+
         return {
             "status": status_str,
             "innings": innings_num,
@@ -595,6 +603,9 @@ class ComputerGameSession:
             "innings_2_wickets": self._match.innings_2_wickets,
             "last_ball": self._last_ball_info,
             "winner": self._match.winner,
+            "winner_side": winner_side,
+            "winner_participant": winner_participant,
+            "user_won": user_won,
             "is_tie": self._match.is_tie,
             "result_description": self._match.result_description,
             "turn_id": self._turn_number,

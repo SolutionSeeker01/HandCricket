@@ -173,3 +173,5 @@ class FriendGameRoom:
         self._is_closed = True
         self._stage = RoomStage.CLOSED
         self._last_activity_at = time.monotonic()
+        if self._session is not None and hasattr(self._session, "close"):
+            self._session.close()

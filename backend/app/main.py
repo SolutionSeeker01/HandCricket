@@ -4,8 +4,11 @@ import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator, Optional
 
+import os
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Query, WebSocket
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.protocol.messages import serialize_error
 from backend.app.protocol.room_manager import (
@@ -15,6 +18,7 @@ from backend.app.protocol.room_manager import (
     get_room_manager,
 )
 from backend.app.transport.websocket import (
+    create_computer_session,
     get_standalone_computer_session,
     get_standalone_turn_session,
     handle_computer_game_websocket,
@@ -167,7 +171,7 @@ async def websocket_endpoint(
 ) -> None:
     """WebSocket endpoint supporting Computer Mode, Friend Mode, protocol turns, and smoke testing."""
     if mode == "computer":
-        session = get_standalone_computer_session(
+        session = create_computer_session(
             user_team=user_team or "IND",
             opponent_team=opponent_team or "AUS",
             skip_pre_match=bool(skip_pre_match),
@@ -216,5 +220,39 @@ async def websocket_friend_endpoint(
 ) -> None:
     """Dedicated WebSocket endpoint for Friend Mode."""
     await handle_friend_game_websocket(websocket, room_code=room, token=token)
+
+
+# ---------------------------------------------------------------------------
+# Static Frontend SPA Serving (Slice 12 / Production Hardening)
+# ---------------------------------------------------------------------------
+dist_dir = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+)
+if os.path.exists(dist_dir):
+    assets_dir = os.path.join(dist_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+    audio_dir = os.path.join(dist_dir, "audio")
+    if os.path.exists(audio_dir):
+        app.mount("/audio", StaticFiles(directory=audio_dir), name="audio")
+
+    @app.get("/")
+    async def serve_index():
+        index_file = os.path.join(dist_dir, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
+        return {"status": "ok", "app": "hand-cricket"}
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        if full_path.startswith("api/") or full_path in ("health", "teams", "ws", "ws/friend"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        file_path = os.path.join(dist_dir, full_path)
+        if full_path and os.path.isfile(file_path):
+            return FileResponse(file_path)
+        index_file = os.path.join(dist_dir, "index.html")
+        if os.path.isfile(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail="Frontend build not found")
 
 

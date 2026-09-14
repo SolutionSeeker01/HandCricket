@@ -27,6 +27,7 @@ from backend.app.protocol.session import TurnSession
 # Module-level standalone session for single-endpoint testing without a room manager
 _standalone_session: Optional[TurnSession] = None
 _standalone_computer_session: Optional[ComputerGameSession] = None
+_injected_computer_session: Optional[ComputerGameSession] = None
 
 
 def get_standalone_turn_session() -> TurnSession:
@@ -46,11 +47,27 @@ def reset_standalone_turn_session(
     return _standalone_session
 
 
+def create_computer_session(
+    user_team: str = "IND", opponent_team: str = "AUS", skip_pre_match: bool = False
+) -> ComputerGameSession:
+    """Create an isolated ComputerGameSession per connection, or return explicit test session if injected."""
+    global _injected_computer_session
+    if _injected_computer_session is not None:
+        return _injected_computer_session
+    return ComputerGameSession(
+        user_team_id=user_team,
+        opponent_team_id=opponent_team,
+        skip_pre_match=skip_pre_match,
+    )
+
+
 def get_standalone_computer_session(
     user_team: str = "IND", opponent_team: str = "AUS", skip_pre_match: bool = False
 ) -> ComputerGameSession:
     """Retrieve or initialize the active ComputerGameSession."""
-    global _standalone_computer_session
+    global _standalone_computer_session, _injected_computer_session
+    if _injected_computer_session is not None:
+        return _injected_computer_session
     if (
         _standalone_computer_session is None
         or (_standalone_computer_session.match is not None and _standalone_computer_session.match.is_completed)
@@ -67,7 +84,8 @@ def reset_standalone_computer_session(
     session: Optional[ComputerGameSession] = None,
 ) -> ComputerGameSession:
     """Reset the standalone ComputerGameSession (useful for test harnesses)."""
-    global _standalone_computer_session
+    global _standalone_computer_session, _injected_computer_session
+    _injected_computer_session = session
     _standalone_computer_session = session if session is not None else ComputerGameSession()
     return _standalone_computer_session
 

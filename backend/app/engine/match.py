@@ -207,6 +207,7 @@ class Match:
 
         self._target: Optional[int] = None
         self._winner: Optional[str] = None
+        self._winner_side: Optional[int] = None
         self._is_tie: bool = False
         self._result_description: Optional[str] = None
 
@@ -334,6 +335,11 @@ class Match:
     def winner(self) -> Optional[str]:
         """Winning team name, or None if match is tied or still in progress."""
         return self._winner
+
+    @property
+    def winner_side(self) -> Optional[int]:
+        """Winning team side (1 for Team 1, 2 for Team 2, or None if tied/in progress)."""
+        return self._winner_side
 
     @property
     def is_tie(self) -> bool:
@@ -567,6 +573,7 @@ class Match:
                 winner=self._team_2,
                 is_tie=False,
                 description=f"{self._team_2} won by {wickets_in_hand} wickets.",
+                winner_side=2,
             )
         elif self._innings_2.is_completed:
             # Innings 2 ended (all-out or max balls reached) without reaching target
@@ -577,6 +584,7 @@ class Match:
                     winner=self._team_1,
                     is_tie=False,
                     description=f"{self._team_1} won by {runs_diff} runs.",
+                    winner_side=1,
                 )
             else:
                 # Exactly equal scores: Tie
@@ -584,9 +592,10 @@ class Match:
                     winner=None,
                     is_tie=True,
                     description=f"Match tied ({self._innings_1.total_runs} - {self._innings_2.total_runs}).",
+                    winner_side=None,
                 )
 
-    def forfeit(self, winner: str, description: str) -> None:
+    def forfeit(self, winner: str, description: str, winner_side: Optional[int] = None) -> None:
         """Terminate the match immediately due to forfeit.
 
         Safely cleans up any active over in BowlingState and transitions
@@ -598,17 +607,24 @@ class Match:
             self._bowling_1.end_innings()
         if self._bowling_2 and self._bowling_2.is_over_active:
             self._bowling_2.end_innings()
-        self._complete_match(winner=winner, is_tie=False, description=description)
+        self._complete_match(
+            winner=winner,
+            is_tie=False,
+            description=description,
+            winner_side=winner_side,
+        )
 
     def _complete_match(
         self,
         winner: Optional[str],
         is_tie: bool,
         description: str,
+        winner_side: Optional[int] = None,
     ) -> None:
         """Transition match to COMPLETED state and record final outcome."""
         self._status = MatchStatus.COMPLETED
         self._winner = winner
+        self._winner_side = winner_side
         self._is_tie = is_tie
         self._result_description = description
 
@@ -739,6 +755,11 @@ class MatchView:
     def winner(self) -> Optional[str]:
         """Winning team name, or None."""
         return self._match.winner
+
+    @property
+    def winner_side(self) -> Optional[int]:
+        """Winning team side (1 for Team 1, 2 for Team 2, or None)."""
+        return self._match.winner_side
 
     @property
     def is_tie(self) -> bool:
