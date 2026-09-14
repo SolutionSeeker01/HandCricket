@@ -255,7 +255,7 @@ class Match:
         """The 1-indexed number of the current or final innings (1, 2, or None if not started)."""
         if self._status == MatchStatus.NOT_STARTED:
             return None
-        if self._status == MatchStatus.INNINGS_1:
+        if self._status == MatchStatus.INNINGS_1 or self._innings_2 is None:
             return 1
         return 2
 
@@ -264,7 +264,7 @@ class Match:
         """Read-only view of the currently active or final innings."""
         if self._status == MatchStatus.NOT_STARTED:
             return None
-        if self._status == MatchStatus.INNINGS_1:
+        if self._status == MatchStatus.INNINGS_1 or self._innings_2 is None:
             return self._innings_1_view
         return self._innings_2_view
 
@@ -273,7 +273,7 @@ class Match:
         """Read-only view of the currently active or final bowling state."""
         if self._status == MatchStatus.NOT_STARTED:
             return None
-        if self._status == MatchStatus.INNINGS_1:
+        if self._status == MatchStatus.INNINGS_1 or self._bowling_2 is None:
             return self._bowling_1_view
         return self._bowling_2_view
 
@@ -348,18 +348,18 @@ class Match:
     @property
     def batting_team(self) -> Optional[str]:
         """Name of the team currently batting, or None if match not active."""
-        if self._status == MatchStatus.INNINGS_1:
+        if self._status == MatchStatus.INNINGS_1 or (self._status == MatchStatus.COMPLETED and self._innings_2 is None):
             return self._team_1
-        if self._status == MatchStatus.INNINGS_2:
+        if self._status == MatchStatus.INNINGS_2 or (self._status == MatchStatus.COMPLETED and self._innings_2 is not None):
             return self._team_2
         return None
 
     @property
     def bowling_team(self) -> Optional[str]:
         """Name of the team currently bowling, or None if match not active."""
-        if self._status == MatchStatus.INNINGS_1:
+        if self._status == MatchStatus.INNINGS_1 or (self._status == MatchStatus.COMPLETED and self._innings_2 is None):
             return self._team_2
-        if self._status == MatchStatus.INNINGS_2:
+        if self._status == MatchStatus.INNINGS_2 or (self._status == MatchStatus.COMPLETED and self._innings_2 is not None):
             return self._team_1
         return None
 
@@ -585,6 +585,20 @@ class Match:
                     is_tie=True,
                     description=f"Match tied ({self._innings_1.total_runs} - {self._innings_2.total_runs}).",
                 )
+
+    def forfeit(self, winner: str, description: str) -> None:
+        """Terminate the match immediately due to forfeit.
+
+        Safely cleans up any active over in BowlingState and transitions
+        the match to COMPLETED state.
+        """
+        if self._status == MatchStatus.COMPLETED:
+            return
+        if self._bowling_1 and self._bowling_1.is_over_active:
+            self._bowling_1.end_innings()
+        if self._bowling_2 and self._bowling_2.is_over_active:
+            self._bowling_2.end_innings()
+        self._complete_match(winner=winner, is_tie=False, description=description)
 
     def _complete_match(
         self,

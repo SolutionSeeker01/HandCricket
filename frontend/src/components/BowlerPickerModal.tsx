@@ -38,19 +38,22 @@ export const BowlerPickerModal: React.FC<BowlerPickerModalProps> = ({
     }
   };
 
+  const calculatedOver = Math.min(maxOvers, usedBowlers.length + 1);
+  const displayOver = currentOver && currentOver >= calculatedOver ? currentOver : calculatedOver;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-md animate-fade-in select-none">
       <div className="relative w-full max-w-lg bg-gradient-to-b from-[#0e223d] to-[#071322] border-2 border-amber-400/60 rounded-3xl p-5 sm:p-7 shadow-[0_0_40px_rgba(245,158,11,0.3)] text-white">
         {/* Header */}
         <div className="text-center pb-4 border-b border-white/10">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 font-extrabold text-xs uppercase tracking-widest mb-2">
-            OVER {currentOver} OF {maxOvers} • BOWLER SELECTION
+            OVER {displayOver} OF {maxOvers} • BOWLER SELECTION
           </div>
           <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
             SELECT NEXT BOWLER
           </h2>
           <p className="text-xs text-slate-300 mt-1">
-            Choose who bowls Over {currentOver} for {teamName}. Each bowler is limited to 1 over per innings.
+            Choose who bowls Over {displayOver} for {teamName}. Each bowler is limited to 1 over per innings.
           </p>
         </div>
 

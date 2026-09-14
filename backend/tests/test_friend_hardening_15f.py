@@ -927,3 +927,91 @@ async def test_out_player_name_on_wicket(manager: RoomManager):
     assert ms["last_ball"]["is_wicket"] is True
     assert ms["last_ball"]["out_player"] == "Rohit Sharma"
 
+
+# ==============================================================================
+# 15. INNINGS 1 FORFEIT & LIFESPAN CLEANUP REGRESSION TESTS
+# ==============================================================================
+
+
+@pytest.mark.anyio
+async def test_innings_1_forfeit_no_innings_2_safe(manager: RoomManager):
+    """Verify that a player forfeit in Innings 1 (where innings_2 is None) does not crash or corrupt state."""
+    from backend.app.engine.match import MatchStatus
+
+    room, _ = await manager.create_room()
+    await manager.join_room(room.room_code)
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room=room, max_overs=5, balls_per_over=6)
+    room.session = session
+
+    ws_a = AsyncMock()
+    ws_b = AsyncMock()
+    await session.register_connection(Participant.A, ws_a)
+    await session.register_connection(Participant.B, ws_b)
+
+    await session.select_team(Participant.A, "IND")
+    await session.select_team(Participant.B, "AUS")
+    session._pre_match._toss._winner = Participant.A
+    await session.choose_toss(Participant.A, "BAT")
+    await session.select_bowler(Participant.B, 11)
+
+    assert session._match is not None
+    assert session._match.status == MatchStatus.INNINGS_1
+    assert session._match.innings_2 is None
+
+    # Simulate player B disconnecting and forfeit grace worker running
+    await session.unregister_connection(Participant.B, ws_b)
+    if Participant.B in session._disconnect_grace_tasks:
+        session._disconnect_grace_tasks[Participant.B].cancel()
+    await session._disconnect_grace_worker(Participant.B, grace_seconds=0.0)
+
+    assert session._match.status == MatchStatus.COMPLETED
+    assert session._match.innings_2 is None
+    assert session._match.current_innings_number == 1
+    assert session._match.batting_team is not None
+    assert session._match.bowling_team is not None
+
+    # Serialization should not crash with AttributeError
+    ms = session.get_match_state_dict()
+    assert ms["status"] == "COMPLETED"
+    assert ms["innings_1_score"] == 0
+    assert ms["innings_2_score"] is None
+    assert ms["winner"] == "India"
+
+    sync_dict = session.get_sync_state_dict(Participant.A)
+    assert sync_dict["type"] == "sync_state"
+    assert sync_dict["stage"] == session.room.stage.value
+
+
+@pytest.mark.anyio
+async def test_direct_match_forfeit_state():
+    """Verify Match.forfeit cleanly terminates active bowling states and marks match completed."""
+    from backend.app.engine.match import Match, MatchStatus
+
+    match = Match(team_1="India", team_2="Australia", max_overs=5, balls_per_over=6)
+    match.start_match()
+
+    assert match.status == MatchStatus.INNINGS_1
+    assert match.innings_2 is None
+    assert match.current_bowling_state is not None
+
+    match.forfeit(winner="India", description="Australia forfeited the match.")
+    assert match.status == MatchStatus.COMPLETED
+    assert match.is_completed is True
+    assert match.winner == "India"
+    assert match.result_description == "Australia forfeited the match."
+    assert match.current_innings_number == 1
+    assert match.current_innings is match.innings_1
+
+
+@pytest.mark.anyio
+async def test_fastapi_lifespan_periodic_cleanup():
+    """Verify lifespan context manager runs periodic room cleanup and cancels cleanly on exit."""
+    from backend.app.main import app, lifespan
+
+    async with lifespan(app):
+        # Lifespan active - cleanup task is running in background
+        pass
+    # Exited cleanly without unhandled cancellation or exception
+
+

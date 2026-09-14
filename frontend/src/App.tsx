@@ -235,6 +235,7 @@ export default function App() {
         <MatchResultModal
           matchState={matchState}
           onPlayAgain={resetGame}
+          onExit={goToLanding}
         />
       )}
 

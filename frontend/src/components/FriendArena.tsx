@@ -53,6 +53,7 @@ export const FriendArena: React.FC<FriendArenaProps> = ({
     startNextInnings,
     requestRematch,
     leaveRoom,
+    reconnect,
   } = useFriendCricketGame({
     roomCode,
     playerToken,
@@ -81,12 +82,20 @@ export const FriendArena: React.FC<FriendArenaProps> = ({
         <p className="text-slate-400 text-sm max-w-xs mb-6">
           {errorMessage || 'Disconnected from Friend match.'}
         </p>
-        <button
-          onClick={onExit}
-          className="py-3 px-6 rounded-2xl font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-lg shadow-amber-500/20 transition-all"
-        >
-          Return to Main Menu
-        </button>
+        <div className="flex flex-col sm:flex-row gap-3">
+          <button
+            onClick={reconnect}
+            className="py-3 px-6 rounded-2xl font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
+          >
+            Retry Connection
+          </button>
+          <button
+            onClick={onExit}
+            className="py-3 px-6 rounded-2xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 transition-all cursor-pointer"
+          >
+            Return to Main Menu
+          </button>
+        </div>
       </div>
     );
   }

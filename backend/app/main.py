@@ -1,6 +1,8 @@
 """FastAPI main application entrypoint for Hand Cricket."""
 
-from typing import Optional
+import asyncio
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator, Optional
 
 from pydantic import BaseModel
 from fastapi import FastAPI, HTTPException, Query, WebSocket
@@ -21,10 +23,37 @@ from backend.app.transport.websocket import (
     websocket_smoke_test,
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Manage application lifespan, including periodic background cleanup of stale rooms."""
+    async def periodic_cleanup() -> None:
+        while True:
+            try:
+                await asyncio.sleep(60)
+                await get_room_manager().cleanup_stale_rooms()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                # Keep cleanup loop resilient
+                pass
+
+    cleanup_task = asyncio.create_task(periodic_cleanup())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except asyncio.CancelledError:
+            pass
+
+
 app = FastAPI(
     title="Hand Cricket API",
     description="Backend API for Hand Cricket Web Game",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 

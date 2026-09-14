@@ -226,9 +226,18 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState, opponentLabe
   // Calculate remaining balls and runs if target is active
   const targetRuns = target !== null ? target - score : null;
   const currentOverFloat = parseFloat(overs) || 0;
-  const completedBalls = Math.floor(currentOverFloat) * 6 + Math.round((currentOverFloat % 1) * 10);
+  const completedOversCount = Math.floor(currentOverFloat);
+  const completedBalls = completedOversCount * 6 + Math.round((currentOverFloat % 1) * 10);
   const totalBalls = max_overs * 6;
   const remainingBalls = Math.max(0, totalBalls - completedBalls);
+
+  // Active over number (1-indexed: 1..max_overs)
+  // After 4 completed overs (overs === "4.0"), we are entering/in Over 5.
+  // During over 5 (overs === "4.1" .. "4.5"), we are in Over 5.
+  const currentOverNumber = Math.min(
+    max_overs,
+    completedOversCount + 1
+  );
 
   return (
     <div className="w-full max-w-4xl px-2 pb-2 sm:pb-3 z-20">
@@ -406,8 +415,11 @@ export const Scoreboard: React.FC<ScoreboardProps> = ({ matchState, opponentLabe
 
           {/* Current Over Ball Indicators */}
           <div className="flex items-center space-x-1 sm:space-x-1.5">
-            <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider mr-1">
-              This Over:
+            <span
+              data-testid="scoreboard-over-label"
+              className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 tracking-wider mr-1"
+            >
+              OVER {currentOverNumber}:
             </span>
             {renderBallIndicators()}
           </div>

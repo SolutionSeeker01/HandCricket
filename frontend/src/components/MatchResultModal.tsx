@@ -180,25 +180,36 @@ export const MatchResultModal: React.FC<MatchResultModalProps> = ({
             </button>
           </div>
         ) : (
-          <button
-            onClick={onPlayAgain}
-            className="w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/30 transition-all flex items-center justify-center space-x-2 cursor-pointer"
-          >
-            <svg
-              className="w-5 h-5 text-slate-950"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          <div className="w-full flex flex-col gap-2.5">
+            <button
+              onClick={onPlayAgain}
+              className="w-full py-3.5 px-6 rounded-2xl font-black text-base tracking-wider uppercase text-slate-950 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:brightness-110 active:scale-98 shadow-lg shadow-amber-500/30 transition-all flex items-center justify-center space-x-2 cursor-pointer"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2.5}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            <span>Play Again</span>
-          </button>
+              <svg
+                className="w-5 h-5 text-slate-950"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2.5}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
+              </svg>
+              <span>Play Again</span>
+            </button>
+
+            {onExit && (
+              <button
+                onClick={onExit}
+                className="w-full py-3 px-6 rounded-2xl font-bold text-sm tracking-wider uppercase text-slate-300 bg-slate-800/80 hover:bg-slate-700 hover:text-white border border-slate-700 transition-all cursor-pointer"
+              >
+                Return to Main Menu
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

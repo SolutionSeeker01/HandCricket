@@ -449,14 +449,30 @@ export function useCricketGame() {
       window.clearTimeout(milestoneTimeoutRef.current);
       milestoneTimeoutRef.current = null;
     }
+    if (matchEndTimeoutRef.current) {
+      window.clearTimeout(matchEndTimeoutRef.current);
+      matchEndTimeoutRef.current = null;
+    }
+    matchCelebratedRef.current = false;
+    stopCountdown();
+    reconnectAttemptRef.current = 0;
+    setSelectedNumber(null);
+    setIsWaiting(false);
+    setEventFeedback(null);
+    setMilestoneFeedback(null);
+    prevPlayerScoresRef.current = {};
+    celebratedMilestonesRef.current.clear();
     setTossActive(false);
     tossActiveRef.current = false;
     setTossOutcome(null);
     setMatchState(null);
+    setPreMatchState(null);
     setBowlerSelectionPrompt(null);
-    stopCountdown();
     setAppStage('LANDING');
     appStageRef.current = 'LANDING';
+    if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'reset_pre_match' }));
+    }
   }, [stopCountdown]);
 
   const selectTeam = useCallback((teamId: string) => {

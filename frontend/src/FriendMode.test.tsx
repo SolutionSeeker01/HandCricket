@@ -785,4 +785,98 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
       expect(screen.getByText('78')).toBeDefined();
     });
   });
+
+  describe('Hardening Regression Tests (Sub-slice 15F Parity & Fixes)', () => {
+    it('displays OVER 5: in Scoreboard when overs is 4.1 (during over 5)', () => {
+      const stateOver5: MatchState = {
+        ...dummyMatchState,
+        overs: '4.1',
+        max_overs: 5,
+        current_over_balls: [4],
+      };
+
+      render(<Scoreboard matchState={stateOver5} />);
+      expect(screen.getByText('OVER 5:')).toBeDefined();
+      expect(screen.queryByText('OVER 4:')).toBeNull();
+      expect(screen.queryByText('This Over:')).toBeNull();
+    });
+
+    it('displays OVER 1: in Scoreboard when overs is 0.0 (first over)', () => {
+      const stateOver1: MatchState = {
+        ...dummyMatchState,
+        overs: '0.0',
+        max_overs: 5,
+        current_over_balls: [],
+      };
+
+      render(<Scoreboard matchState={stateOver1} />);
+      expect(screen.getByText('OVER 1:')).toBeDefined();
+    });
+
+    it('renders Return to Main Menu button in Computer Mode MatchResultModal and calls onExit', () => {
+      const handleExit = vi.fn();
+      const completedState: MatchState = {
+        ...dummyMatchState,
+        status: 'COMPLETED',
+        winner: 'India',
+        result_description: 'India won by 10 runs',
+      };
+
+      render(
+        <MatchResultModal
+          matchState={completedState}
+          onPlayAgain={vi.fn()}
+          onExit={handleExit}
+          isFriendMode={false}
+        />
+      );
+
+      const exitBtn = screen.getByText('Return to Main Menu');
+      expect(exitBtn).toBeDefined();
+      fireEvent.click(exitBtn);
+      expect(handleExit).toHaveBeenCalledTimes(1);
+    });
+
+    it('renders YOU WON! in Friend Mode MatchResultModal when winner matches user_team', () => {
+      const winState: MatchState = {
+        ...dummyMatchState,
+        status: 'COMPLETED',
+        winner: 'India',
+        user_team: { id: 'IND', name: 'India' },
+        opponent_team: { id: 'AUS', name: 'Australia' },
+        result_description: 'India won by 10 runs',
+      };
+
+      render(
+        <MatchResultModal
+          matchState={winState}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      expect(screen.getByText('YOU WON!')).toBeDefined();
+    });
+
+    it('renders YOU LOST! in Friend Mode MatchResultModal when winner matches opponent_team', () => {
+      const lossState: MatchState = {
+        ...dummyMatchState,
+        status: 'COMPLETED',
+        winner: 'Australia',
+        user_team: { id: 'IND', name: 'India' },
+        opponent_team: { id: 'AUS', name: 'Australia' },
+        result_description: 'Australia won by 4 wickets',
+      };
+
+      render(
+        <MatchResultModal
+          matchState={lossState}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      expect(screen.getByText('YOU LOST!')).toBeDefined();
+    });
+  });
 });

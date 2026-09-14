@@ -368,10 +368,7 @@ class FriendGameSession:
                 )
 
                 if self._match:
-                    self._match._status = MatchStatus.COMPLETED
-                    self._match._winner = winner_name
-                    self._match._is_tie = False
-                    self._match._result_description = description
+                    self._match.forfeit(winner=winner_name, description=description)
 
                 self._room.stage = RoomStage.MATCH_COMPLETED
 
@@ -1228,7 +1225,12 @@ class FriendGameSession:
             return {}
 
         is_completed = self._match.is_completed
-        innings_num = 1 if self._match.status == MatchStatus.INNINGS_1 else 2
+        if self._match.status == MatchStatus.INNINGS_1:
+            innings_num = 1
+        elif self._match.status == MatchStatus.INNINGS_2:
+            innings_num = 2
+        else:
+            innings_num = 2 if self._match.innings_2 is not None else 1
         active_innings = (
             self._match.innings_1 if innings_num == 1 else self._match.innings_2
         )
@@ -1400,7 +1402,12 @@ class FriendGameSession:
             used_players = []
             curr_over = 1
         else:
-            innings_num = 1 if self._match.status == MatchStatus.INNINGS_1 else 2
+            if self._match.status == MatchStatus.INNINGS_1:
+                innings_num = 1
+            elif self._match.status == MatchStatus.INNINGS_2:
+                innings_num = 2
+            else:
+                innings_num = 2 if self._match.innings_2 is not None else 1
             a_bats_first = (
                 self._pre_match.batting_first_participant == Participant.A
             )
@@ -1480,7 +1487,12 @@ class FriendGameSession:
 
         innings_num = 1
         if self._match:
-            innings_num = 1 if self._match.status == MatchStatus.INNINGS_1 else 2
+            if self._match.status == MatchStatus.INNINGS_1:
+                innings_num = 1
+            elif self._match.status == MatchStatus.INNINGS_2:
+                innings_num = 2
+            else:
+                innings_num = 2 if self._match.innings_2 is not None else 1
 
         a_bats_first = self._pre_match.batting_first_participant == Participant.A
         batting_part = (
