@@ -13,7 +13,7 @@ from typing import Any, Dict, Optional, Set
 
 from fastapi import WebSocket
 
-from backend.app.engine.ball import resolve_ball, validate_choice
+from backend.app.engine.ball import VALID_BALL_CHOICES, resolve_ball, validate_choice
 from backend.app.engine.match import Match, MatchStatus
 from backend.app.engine.pre_match import PreMatchError, PreMatchSetup
 from backend.app.engine.teams import TeamNotFoundError, get_team
@@ -945,10 +945,10 @@ class FriendGameSession:
                 # Deadline reached: mark unsubmitted participants and generate random fallback
                 if self._current_turn.choice_a is None:
                     self._current_turn.a_timed_out = True
-                    self._current_turn.choice_a = secrets.randbelow(6) + 1
+                    self._current_turn.choice_a = secrets.choice(VALID_BALL_CHOICES)
                 if self._current_turn.choice_b is None:
                     self._current_turn.b_timed_out = True
-                    self._current_turn.choice_b = secrets.randbelow(6) + 1
+                    self._current_turn.choice_b = secrets.choice(VALID_BALL_CHOICES)
 
                 await self._resolve_turn_locked()
 
@@ -1026,7 +1026,7 @@ class FriendGameSession:
             now = time.monotonic()
             if self._current_turn.is_expired(now):
                 # Late submission after deadline: mark timed out with fallback choice
-                fallback = secrets.randbelow(6) + 1
+                fallback = secrets.choice(VALID_BALL_CHOICES)
                 if participant == Participant.A:
                     self._current_turn.choice_a = fallback
                     self._current_turn.a_timed_out = True

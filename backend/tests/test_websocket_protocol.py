@@ -133,7 +133,7 @@ def test_timeout_fallback_when_b_does_not_submit():
 
 def test_timeout_fallback_when_a_does_not_submit():
     """Requirement: B submits, A times out -> B's choice preserved, A gets fallback."""
-    bot_a = ComputerPlayer(chooser=lambda: 5)
+    bot_a = ComputerPlayer(chooser=lambda: 6)
     session = TurnSession(
         timeout_seconds=0.05,
         computer_a=bot_a,
@@ -145,8 +145,8 @@ def test_timeout_fallback_when_a_does_not_submit():
             ws_a.receive_json()  # turn_started
             ws_b.receive_json()  # turn_started
 
-            # B submits 5 (matching bot_a choice 5 -> wicket)
-            ws_b.send_json({"type": "submit_number", "number": 5})
+            # B submits 6 (matching bot_a choice 6 -> wicket)
+            ws_b.send_json({"type": "submit_number", "number": 6})
             ws_a.receive_json()  # number_submitted
             ws_b.receive_json()  # number_submitted
 
@@ -156,9 +156,9 @@ def test_timeout_fallback_when_a_does_not_submit():
 
             assert res_a == res_b
             assert res_a["type"] == "ball_result"
-            assert res_a["choice_a"] == 5
+            assert res_a["choice_a"] == 6
             assert res_a["a_timed_out"] is True
-            assert res_a["choice_b"] == 5
+            assert res_a["choice_b"] == 6
             assert res_a["b_timed_out"] is False
             assert res_a["is_wicket"] is True
             assert res_a["runs"] == 0
@@ -237,6 +237,7 @@ def test_timer_cancelled_when_both_submit_in_time():
         (json.dumps({"type": "submit_number", "number": False}), "invalid_number"),
         (json.dumps({"type": "submit_number", "number": "4"}), "invalid_number"),
         (json.dumps({"type": "submit_number", "number": 0}), "invalid_number"),
+        (json.dumps({"type": "submit_number", "number": 5}), "invalid_number"),
         (json.dumps({"type": "submit_number", "number": 7}), "invalid_number"),
         (json.dumps({"type": "submit_number", "number": -1}), "invalid_number"),
     ],
@@ -280,7 +281,7 @@ def test_rejects_duplicate_submission_over_websocket():
             ws_b.receive_json()
 
             # Second submission by A is rejected
-            ws_a.send_json({"type": "submit_number", "number": 5})
+            ws_a.send_json({"type": "submit_number", "number": 4})
             err = ws_a.receive_json()
             assert err["type"] == "error"
             assert err["code"] == "duplicate_submission"
@@ -437,8 +438,8 @@ def test_normal_interaction_succeeds_after_duplicate_rejection():
             assert ws_a.receive_json()["type"] == "turn_started"
             assert ws_b.receive_json()["type"] == "turn_started"
 
-            # A submits 5
-            ws_a.send_json({"type": "submit_number", "number": 5})
+            # A submits 4
+            ws_a.send_json({"type": "submit_number", "number": 4})
             assert ws_a.receive_json()["type"] == "number_submitted"
             assert ws_b.receive_json()["type"] == "number_submitted"
 
@@ -452,9 +453,9 @@ def test_normal_interaction_succeeds_after_duplicate_rejection():
             res_b = ws_b.receive_json()
             assert res_a == res_b
             assert res_a["type"] == "ball_result"
-            assert res_a["choice_a"] == 5
+            assert res_a["choice_a"] == 4
             assert res_a["choice_b"] == 2
-            assert res_a["runs"] == 5
+            assert res_a["runs"] == 4
 
 
 def test_client_payload_participant_field_cannot_override_server_bound_identity():

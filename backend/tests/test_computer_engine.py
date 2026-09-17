@@ -3,6 +3,7 @@
 import pytest
 
 from backend.app.engine.ball import (
+    VALID_BALL_CHOICES,
     InvalidBallChoiceError,
     resolve_ball,
 )
@@ -29,16 +30,16 @@ def test_deterministic_injected_maximum_value():
     assert bot.choose_number() == 6
 
 
-@pytest.mark.parametrize("expected_val", [1, 2, 3, 4, 5, 6])
+@pytest.mark.parametrize("expected_val", VALID_BALL_CHOICES)
 def test_deterministic_injected_all_valid_values(expected_val):
-    """ComputerPlayer returns each valid choice 1 through 6 when injected."""
+    """ComputerPlayer returns each valid choice 1, 2, 3, 4, 6 when injected."""
     bot = ComputerPlayer(chooser=lambda: expected_val)
     assert bot.choose_number() == expected_val
 
 
 def test_sequential_injected_values():
     """ComputerPlayer correctly yields a sequence of pre-determined choices."""
-    sequence = iter([3, 1, 4, 6, 2, 5])
+    sequence = iter([3, 1, 4, 6, 2, 4])
     bot = ComputerPlayer(chooser=lambda: next(sequence))
 
     assert bot.choose_number() == 3
@@ -46,17 +47,19 @@ def test_sequential_injected_values():
     assert bot.choose_number() == 4
     assert bot.choose_number() == 6
     assert bot.choose_number() == 2
-    assert bot.choose_number() == 5
+    assert bot.choose_number() == 4
 
 
 def test_repeated_calls_work_independently():
     """Multiple calls to choose_number() execute the chooser independently each time."""
     call_count = 0
+    choices = [2, 3, 4]
 
     def counting_chooser() -> int:
         nonlocal call_count
+        val = choices[call_count % len(choices)]
         call_count += 1
-        return (call_count % 6) + 1
+        return val
 
     bot = ComputerPlayer(chooser=counting_chooser)
     assert bot.choose_number() == 2
@@ -71,21 +74,23 @@ def test_repeated_calls_work_independently():
 
 
 def test_default_number_chooser_produces_legal_value():
-    """default_number_chooser() returns an integer between 1 and 6."""
+    """default_number_chooser() returns an integer in (1, 2, 3, 4, 6)."""
     val = default_number_chooser()
     assert isinstance(val, int)
     assert not isinstance(val, bool)
-    assert 1 <= val <= 6
+    assert val in VALID_BALL_CHOICES
+    assert val != 5
 
 
 def test_default_chooser_repeated_calls_always_valid():
-    """Default ComputerPlayer produces valid choices 1-6 over repeated calls."""
+    """Default ComputerPlayer produces valid choices in (1, 2, 3, 4, 6) over repeated calls."""
     bot = ComputerPlayer()
     for _ in range(100):
         choice = bot.choose_number()
         assert isinstance(choice, int)
         assert not isinstance(choice, bool)
-        assert 1 <= choice <= 6
+        assert choice in VALID_BALL_CHOICES
+        assert choice != 5
 
 
 # ===========================================================================
@@ -93,11 +98,11 @@ def test_default_chooser_repeated_calls_always_valid():
 # ===========================================================================
 
 
-@pytest.mark.parametrize("out_of_bounds", [0, 7, -1, -100, 8, 99])
+@pytest.mark.parametrize("out_of_bounds", [0, 5, 7, -1, -100, 8, 99])
 def test_rejects_out_of_bounds_injected_values(out_of_bounds):
-    """Injected values outside [1, 6] raise InvalidBallChoiceError."""
+    """Injected values outside VALID_BALL_CHOICES raise InvalidBallChoiceError."""
     bot = ComputerPlayer(chooser=lambda: out_of_bounds)
-    with pytest.raises(InvalidBallChoiceError, match="choice must be between 1 and 6"):
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
         bot.choose_number()
 
 
@@ -145,13 +150,13 @@ def test_usable_as_batsman_choice():
 
 def test_usable_as_bowler_choice():
     """ComputerPlayer output can be directly passed as bowler choice in ball resolution."""
-    bot = ComputerPlayer(chooser=lambda: 5)
-    # Batsman chooses 5, bowler chooses 5 -> Wicket
-    res = resolve_ball(batsman_choice=5, bowler_choice=bot.choose_number())
+    bot = ComputerPlayer(chooser=lambda: 4)
+    # Batsman chooses 4, bowler chooses 4 -> Wicket
+    res = resolve_ball(batsman_choice=4, bowler_choice=bot.choose_number())
     assert res.runs == 0
     assert res.is_wicket is True
-    assert res.batsman_choice == 5
-    assert res.bowler_choice == 5
+    assert res.batsman_choice == 4
+    assert res.bowler_choice == 4
 
 
 def test_bot_vs_bot_interaction():
@@ -204,3 +209,10 @@ def test_repr_string_formatting():
 
     bot_custom = ComputerPlayer(chooser=lambda: 2)
     assert "ComputerPlayer" in repr(bot_custom)
+
+
+def test_default_number_chooser_never_returns_5():
+    """Sample default chooser 1,000 times to verify 5 is never chosen and all valid choices appear."""
+    samples = {default_number_chooser() for _ in range(1000)}
+    assert 5 not in samples
+    assert samples == set(VALID_BALL_CHOICES)

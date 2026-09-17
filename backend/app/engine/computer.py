@@ -15,6 +15,7 @@ from typing import Callable, Optional
 from backend.app.engine.ball import (
     MAX_BALL_CHOICE,
     MIN_BALL_CHOICE,
+    VALID_BALL_CHOICES,
     InvalidBallChoiceError,
     validate_choice,
 )
@@ -23,17 +24,17 @@ NumberChooser = Callable[[], int]
 
 
 def default_number_chooser() -> int:
-    """Production default random chooser generating an integer in [1, 6]."""
-    return random.randint(MIN_BALL_CHOICE, MAX_BALL_CHOICE)
+    """Production default random chooser generating an integer in (1, 2, 3, 4, 6)."""
+    return random.choice(VALID_BALL_CHOICES)
 
 
 class ComputerPlayer:
     """Headless Computer Player for Hand Cricket.
 
-    Generates legal 1–6 number choices for batting or bowling turns.
+    Generates legal number choices (1, 2, 3, 4, 6) for batting or bowling turns.
 
     Invariants:
-        - Returned choices are strictly integers in [1, 6].
+        - Returned choices are strictly integers in VALID_BALL_CHOICES (1, 2, 3, 4, 6).
         - Reuses ball.py's validate_choice() as the single source of truth.
         - Supports dependency injection of the chooser callable for deterministic testing.
         - Encapsulates no mutable match/game state.
@@ -52,7 +53,7 @@ class ComputerPlayer:
         """Generate and validate a ball choice.
 
         Returns:
-            An integer between 1 and 6.
+            An integer in (1, 2, 3, 4, 6).
 
         Raises:
             InvalidBallChoiceError: If the underlying chooser produces an invalid choice

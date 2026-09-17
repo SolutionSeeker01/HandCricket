@@ -245,19 +245,14 @@ export const PitchArena: React.FC<PitchArenaProps> = ({
                 />
               </svg>
             </div>
-            <p className="text-xs sm:text-sm font-bold tracking-wide text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)] mt-0.5">
-              {userIsBatting
-                ? 'Choose your number (1 – 6)'
-                : 'Choose your delivery (1 – 6)'}
-            </p>
           </div>
         )}
       </div>
 
-      {/* 4. CIRCULAR WHITE KEYPAD (1 - 6) - GUARANTEED TRUE PERFECT CIRCLES */}
+      {/* 4. CIRCULAR WHITE KEYPAD (1, 2, 3, 4, 6) - GUARANTEED TRUE PERFECT CIRCLES */}
       <div className="w-full flex items-center justify-center z-10 mb-2 sm:mb-4 px-1 sm:px-2">
         <div className="flex items-center justify-center gap-1.5 min-[370px]:gap-2 sm:gap-4 max-w-full">
-          {[1, 2, 3, 4, 5, 6].map((num) => {
+          {[1, 2, 3, 4, 6].map((num) => {
             const isSelected = selectedNumber === num;
             return (
               <button

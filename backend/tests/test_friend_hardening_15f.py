@@ -101,7 +101,7 @@ async def test_spam_click_protection(manager: RoomManager):
 
     # Subsequent spam submissions from participant A in the same turn are rejected
     with pytest.raises(TurnProtocolError, match="already been submitted"):
-        await session.submit_number(Participant.A, 5, turn_id=turn_id)
+        await session.submit_number(Participant.A, 4, turn_id=turn_id)
 
     with pytest.raises(TurnProtocolError, match="already been submitted"):
         await session.submit_number(Participant.A, 2, turn_id=turn_id)
@@ -626,9 +626,9 @@ async def test_reconnect_preserves_choice_secrecy_before_resolution(manager: Roo
     await session.choose_toss(Participant.A, "BAT")
     await session.select_bowler(Participant.B, 11)
 
-    # Participant A submits 5
+    # Participant A submits 4
     t_id = session.turn_number
-    await session.submit_number(Participant.A, 5, turn_id=t_id)
+    await session.submit_number(Participant.A, 4, turn_id=t_id)
 
     # Participant B disconnects and reconnects
     ws_b_new = AsyncMock()

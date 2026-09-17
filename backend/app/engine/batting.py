@@ -150,7 +150,7 @@ class BattingState:
         - When runs are scored:
             * Runs added to striker's individual score.
             * Runs added to team total.
-            * Odd runs (1, 3, 5): striker and non-striker swap ends.
+            * Odd runs (1, 3): striker and non-striker swap ends.
             * Even runs (2, 4, 6): striker and non-striker remain in place.
         - When a wicket falls:
             * Current striker is dismissed and added to dismissed list.

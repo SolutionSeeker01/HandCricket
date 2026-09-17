@@ -74,13 +74,13 @@ def test_ball_resolution_when_b_is_batsman():
     """Ball resolution correctly maps choices when Participant B is batsman."""
     turn = Turn(batting_participant=Participant.B)
     turn.submit_choice(Participant.A, 3)  # Bowler choice
-    completed = turn.submit_choice(Participant.B, 5)  # Batsman choice
+    completed = turn.submit_choice(Participant.B, 6)  # Batsman choice
 
     assert completed is True
     assert turn.ball_result is not None
-    assert turn.ball_result.batsman_choice == 5
+    assert turn.ball_result.batsman_choice == 6
     assert turn.ball_result.bowler_choice == 3
-    assert turn.ball_result.runs == 5
+    assert turn.ball_result.runs == 6
     assert turn.ball_result.is_wicket is False
 
 
@@ -107,7 +107,7 @@ def test_rejects_duplicate_submission_same_participant():
     turn.submit_choice(Participant.A, 3)
 
     with pytest.raises(TurnProtocolError) as exc_info:
-        turn.submit_choice(Participant.A, 5)
+        turn.submit_choice(Participant.A, 4)
     assert exc_info.value.code == "duplicate_submission"
 
 
@@ -123,9 +123,9 @@ def test_rejects_submission_after_turn_completed():
     assert exc_info.value.code == "turn_completed"
 
 
-@pytest.mark.parametrize("invalid_num", [0, 7, -1, 10, True, False, "4", None])
+@pytest.mark.parametrize("invalid_num", [0, 5, 7, -1, 10, True, False, "4", None])
 def test_rejects_invalid_number_choice(invalid_num):
-    """Numbers outside [1, 6], booleans, and non-integers are rejected."""
+    """Numbers outside (1, 2, 3, 4, 6), booleans, and non-integers are rejected."""
     turn = Turn()
     with pytest.raises(TurnProtocolError) as exc_info:
         turn.submit_choice(Participant.A, invalid_num)  # type: ignore
@@ -174,16 +174,16 @@ def test_timeout_fallback_when_a_did_not_submit():
 def test_timeout_fallback_when_neither_submitted():
     """When both time out, both receive server-generated choices."""
     turn = Turn(batting_participant=Participant.A)
-    bot_a = ComputerPlayer(chooser=lambda: 5)
+    bot_a = ComputerPlayer(chooser=lambda: 6)
     bot_b = ComputerPlayer(chooser=lambda: 1)
 
     result = turn.handle_timeout(computer_a=bot_a, computer_b=bot_b)
     assert turn.is_completed is True
-    assert turn.choice_a == 5
+    assert turn.choice_a == 6
     assert turn.a_timed_out is True
     assert turn.choice_b == 1
     assert turn.b_timed_out is True
-    assert result.runs == 5
+    assert result.runs == 6
 
 
 def test_timeout_on_already_completed_turn_is_idempotent():
@@ -274,6 +274,7 @@ def test_parse_valid_submit_number_message():
         ('{"type": "submit_number", "number": false}', "invalid_number"),
         ('{"type": "submit_number", "number": "4"}', "invalid_number"),
         ('{"type": "submit_number", "number": 0}', "invalid_number"),
+        ('{"type": "submit_number", "number": 5}', "invalid_number"),
         ('{"type": "submit_number", "number": 7}', "invalid_number"),
         ('{"type": "submit_number", "number": -1}', "invalid_number"),
     ],

@@ -517,5 +517,22 @@ def test_computer_session_direct_mode_rejects_same_teams():
     assert exc_info.value.code == "duplicate_teams"
 
 
+def test_computer_mode_submitting_number_5_rejected():
+    """Verify that submitting choice 5 in Computer Mode is authoritatively rejected."""
+    session = ComputerGameSession()
+    reset_standalone_computer_session(session)
+
+    with client.websocket_connect("/ws?mode=computer") as ws:
+        msg = ws.receive_json()
+        assert msg["type"] == "turn_started"
+
+        # User submits 5 -> rejected with invalid_number error
+        ws.send_json({"type": "submit_number", "number": 5})
+        err = ws.receive_json()
+        assert err["type"] == "error"
+        assert err["code"] == "invalid_number"
+        assert "choice must be one of" in err["message"]
+
+
 
 

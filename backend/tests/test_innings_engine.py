@@ -20,7 +20,8 @@ from backend.app.engine.innings import (
 
 def make_run_ball(runs: int) -> BallResult:
     """Helper to produce a non-wicket BallResult for scoring runs via resolve_ball."""
-    return resolve_ball(batsman_choice=runs, bowler_choice=(runs % 6) + 1)
+    bowler = 2 if runs != 2 else 1
+    return resolve_ball(batsman_choice=runs, bowler_choice=bowler)
 
 
 def make_wicket_ball() -> BallResult:
@@ -186,7 +187,7 @@ def test_wicket_ball_counts_towards_over_and_total():
     innings = Innings()
 
     # Ball 1: Wicket!
-    wicket_ball = resolve_ball(5, 5)
+    wicket_ball = resolve_ball(3, 3)
     innings.record_ball(wicket_ball)
 
     assert innings.balls_in_current_over == 1
@@ -363,8 +364,8 @@ def test_realistic_sequential_innings_progression():
     assert innings.striker == 1
     assert innings.non_striker == 2
 
-    # Ball 5: Batsman 1 gets OUT (5 vs 5)! Batsman 3 enters as striker
-    innings.record_ball(resolve_ball(5, 5))
+    # Ball 5: Batsman 1 gets OUT (3 vs 3)! Batsman 3 enters as striker
+    innings.record_ball(resolve_ball(3, 3))
     assert innings.total_balls == 5
     assert innings.balls_in_current_over == 5
     assert innings.current_over == 1

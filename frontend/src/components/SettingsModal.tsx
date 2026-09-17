@@ -126,7 +126,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
           <ul className="space-y-1.5 list-disc pl-4 text-slate-300">
             <li>
-              <strong>Simultaneous Numbers</strong>: Both batsman and bowler choose an integer from <strong className="text-amber-400">1 to 6</strong>.
+              <strong>Simultaneous Numbers</strong>: Both batsman and bowler choose an integer (<strong className="text-amber-400">1, 2, 3, 4, or 6</strong>).
             </li>
             <li>
               <strong>Scoring</strong>: If choices differ, the batsman scores the runs of their choice!

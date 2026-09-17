@@ -5,18 +5,20 @@ in a Hand Cricket match. It has zero external dependencies and does not perform 
 """
 
 from dataclasses import dataclass
+from typing import Tuple
 
+VALID_BALL_CHOICES: Tuple[int, ...] = (1, 2, 3, 4, 6)
 MIN_BALL_CHOICE: int = 1
 MAX_BALL_CHOICE: int = 6
 
 
 class InvalidBallChoiceError(ValueError):
-    """Raised when a player's choice is not a valid integer between 1 and 6."""
+    """Raised when a player's choice is not a valid integer in (1, 2, 3, 4, 6)."""
     pass
 
 
 def validate_choice(choice: int, role: str = "player") -> int:
-    """Validate that a choice is strictly an integer between 1 and 6.
+    """Validate that a choice is strictly an integer in (1, 2, 3, 4, 6).
 
     Args:
         choice: The choice value to validate.
@@ -26,7 +28,7 @@ def validate_choice(choice: int, role: str = "player") -> int:
         The validated integer choice.
 
     Raises:
-        InvalidBallChoiceError: If choice is not an integer or outside [1, 6].
+        InvalidBallChoiceError: If choice is not an integer or not in VALID_BALL_CHOICES.
     """
     # Reject booleans explicitly, since in Python bool is a subclass of int
     if isinstance(choice, bool) or not isinstance(choice, int):
@@ -34,9 +36,9 @@ def validate_choice(choice: int, role: str = "player") -> int:
             f"Invalid {role} choice {choice!r}: choice must be an integer, got {type(choice).__name__}."
         )
 
-    if choice < MIN_BALL_CHOICE or choice > MAX_BALL_CHOICE:
+    if choice not in VALID_BALL_CHOICES:
         raise InvalidBallChoiceError(
-            f"Invalid {role} choice {choice}: choice must be between {MIN_BALL_CHOICE} and {MAX_BALL_CHOICE}."
+            f"Invalid {role} choice {choice}: choice must be one of {list(VALID_BALL_CHOICES)}."
         )
 
     return choice
@@ -47,15 +49,15 @@ class BallResult:
     """Immutable representation of the outcome of a single ball.
 
     Invariants:
-        - batsman_choice and bowler_choice must be integers in [1, 6].
+        - batsman_choice and bowler_choice must be integers in (1, 2, 3, 4, 6).
         - If batsman_choice == bowler_choice:
             is_wicket must be True, runs must be 0.
         - If batsman_choice != bowler_choice:
             is_wicket must be False, runs must equal batsman_choice.
 
     Attributes:
-        batsman_choice: The integer chosen by the batsman (1-6).
-        bowler_choice: The integer chosen by the bowler (1-6).
+        batsman_choice: The integer chosen by the batsman (1, 2, 3, 4, 6).
+        bowler_choice: The integer chosen by the bowler (1, 2, 3, 4, 6).
         runs: Number of runs scored on this ball (0 if wicket).
         is_wicket: True if the batsman was dismissed, False otherwise.
     """
@@ -102,8 +104,8 @@ def resolve_ball(batsman_choice: int, bowler_choice: int) -> BallResult:
     - If batsman_choice != bowler_choice: Batsman scores runs equal to batsman_choice.
 
     Args:
-        batsman_choice: An integer from 1 to 6 chosen by the batsman.
-        bowler_choice: An integer from 1 to 6 chosen by the bowler.
+        batsman_choice: An integer from (1, 2, 3, 4, 6) chosen by the batsman.
+        bowler_choice: An integer from (1, 2, 3, 4, 6) chosen by the bowler.
 
     Returns:
         BallResult containing the ball resolution details.

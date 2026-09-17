@@ -190,12 +190,12 @@ def test_wicket_ball_resolution(client: TestClient):
             ws_a.receive_json()  # turn_started
             ws_b.receive_json()  # turn_started
 
-            # Both submit 5 (matching numbers = WICKET!)
-            ws_a.send_json({"type": "submit_number", "turn_id": 1, "number": 5})
+            # Both submit 6 (matching numbers = WICKET!)
+            ws_a.send_json({"type": "submit_number", "turn_id": 1, "number": 6})
             ws_a.receive_json()  # ack A
             ws_b.receive_json()  # ack A
 
-            ws_b.send_json({"type": "submit_number", "turn_id": 1, "number": 5})
+            ws_b.send_json({"type": "submit_number", "turn_id": 1, "number": 6})
             ws_a.receive_json()  # ack B
             ws_b.receive_json()  # ack B
 
@@ -243,7 +243,12 @@ def test_stale_turn_and_invalid_number_handling(client: TestClient):
             ws_a.receive_json()  # turn 1 started
             ws_b.receive_json()
 
-            # 1. Invalid numbers (0, 7, -1) rejected
+            # 1. Invalid numbers (0, 5, 7, -1) rejected
+            ws_a.send_json({"type": "submit_number", "turn_id": 1, "number": 5})
+            err_five = ws_a.receive_json()
+            assert err_five["type"] == "error"
+            assert err_five["code"] == "invalid_number"
+
             ws_a.send_json({"type": "submit_number", "turn_id": 1, "number": 7})
             err1 = ws_a.receive_json()
             assert err1["type"] == "error"

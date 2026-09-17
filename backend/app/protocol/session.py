@@ -199,7 +199,7 @@ class TurnSession:
 
         Args:
             participant: Server-owned Participant (A or B, enum or string).
-            number: 1-6 integer choice.
+            number: Integer choice in (1, 2, 3, 4, 6).
 
         Raises:
             TurnProtocolError: If turn completed, duplicate, or number invalid.

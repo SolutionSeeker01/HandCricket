@@ -112,7 +112,7 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(screen.getAllByText('6').length).toBeGreaterThan(0);
   });
 
-  it('PitchArena renders 1-6 buttons and triggers onSelectNumber when clicked', () => {
+  it('PitchArena renders 1, 2, 3, 4, 6 buttons and triggers onSelectNumber when clicked without helper text', () => {
     const handleSelect = vi.fn();
     render(
       <PitchArena
@@ -125,7 +125,14 @@ describe('Slice 12 Frontend Component Tests', () => {
     );
 
     expect(screen.getByText('YOUR SHOT')).toBeDefined();
-    expect(screen.getByText('Choose your number (1 – 6)')).toBeDefined();
+    // Helper instruction text must NOT be rendered
+    expect(screen.queryByText(/Choose your number/i)).toBeNull();
+    expect(screen.queryByLabelText('Select 5')).toBeNull();
+
+    // Verify all 5 legal buttons remain
+    [1, 2, 3, 4, 6].forEach((num) => {
+      expect(screen.getByLabelText(`Select ${num}`)).toBeDefined();
+    });
 
     // Click button '4'
     const btn4 = screen.getByLabelText('Select 4');
@@ -133,7 +140,7 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(handleSelect).toHaveBeenCalledWith(4);
   });
 
-  it('PitchArena renders YOUR DELIVERY when user is bowling in Innings 2', () => {
+  it('PitchArena renders YOUR DELIVERY when user is bowling in Innings 2 without helper text', () => {
     const bowlingState: MatchState = {
       ...mockMatchState,
       user_is_batting: false,
@@ -149,7 +156,8 @@ describe('Slice 12 Frontend Component Tests', () => {
     );
 
     expect(screen.getByText('YOUR DELIVERY')).toBeDefined();
-    expect(screen.getByText('Choose your delivery (1 – 6)')).toBeDefined();
+    // Helper delivery instruction text must NOT be rendered
+    expect(screen.queryByText(/Choose your delivery/i)).toBeNull();
   });
 
   it('PitchArena keeps user on arena while waiting (NO separate waiting screen)', () => {
@@ -315,7 +323,7 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(screen.queryByText('VS')).toBeNull();
   });
 
-  it('PitchArena renders exactly 6 circular input buttons with 1:1 aspect ratio', () => {
+  it('PitchArena renders exactly 5 circular input buttons (1, 2, 3, 4, 6) with 1:1 aspect ratio and excludes 5', () => {
     render(
       <PitchArena
         matchState={mockMatchState}
@@ -326,13 +334,17 @@ describe('Slice 12 Frontend Component Tests', () => {
       />
     );
 
-    for (let num = 1; num <= 6; num++) {
+    const validChoices = [1, 2, 3, 4, 6];
+    for (const num of validChoices) {
       const btn = screen.getByLabelText(`Select ${num}`);
       expect(btn).toBeDefined();
       expect(btn.className).toContain('rounded-full');
       expect(btn.className).toContain('aspect-square');
       expect(btn.style.aspectRatio).toBe('1 / 1');
     }
+
+    // Button 5 MUST NOT exist
+    expect(screen.queryByLabelText('Select 5')).toBeNull();
   });
 
   it('PitchArena renders milestone celebration overlay for FIFTY with batsman name', () => {

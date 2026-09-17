@@ -37,9 +37,15 @@ def _score_runs(match: Match, runs_needed: int) -> None:
                 break
             match.select_bowler(eligible[0])
 
-        step = min(runs_remaining, 6)
-        # Bat choice = step, bowl choice = (step % 6) + 1 (different, so scores runs without wicket)
-        bowl = (step % 6) + 1
+        if runs_remaining >= 6:
+            step = 6
+        elif runs_remaining == 5:
+            step = 4
+        else:
+            step = runs_remaining
+
+        # Bowl choice is always in (1, 2) and different from step
+        bowl = 2 if step != 2 else 1
         match.resolve_and_record_ball(step, bowl)
         runs_remaining -= step
 

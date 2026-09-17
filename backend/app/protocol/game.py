@@ -733,7 +733,7 @@ class ComputerGameSession:
             pass
 
     def submit_number(self, user_number: int, turn_id: Optional[int] = None):
-        """Process user number submission (1..6).
+        """Process user number submission (1, 2, 3, 4, 6).
 
         Captures active turn ID synchronously at invocation time so concurrent calls
         for the active turn are bound to the current turn before any execution begins.

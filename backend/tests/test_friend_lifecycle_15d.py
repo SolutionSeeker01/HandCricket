@@ -155,8 +155,8 @@ async def test_innings_1_completion_ten_wickets(manager: RoomManager):
     await session.select_bowler(Participant.B, 11)
     for w in range(1, 7):
         turn_id = w
-        await session.submit_number(Participant.A, 5, turn_id=turn_id)
-        await session.submit_number(Participant.B, 5, turn_id=turn_id)
+        await session.submit_number(Participant.A, 6, turn_id=turn_id)
+        await session.submit_number(Participant.B, 6, turn_id=turn_id)
 
     # Over 1 complete (6 balls bowled): transition to BOWLER_SELECTION
     assert session.stage == RoomStage.BOWLER_SELECTION
@@ -166,8 +166,8 @@ async def test_innings_1_completion_ten_wickets(manager: RoomManager):
     await session.select_bowler(Participant.B, 10)
     for w in range(1, 5):
         turn_id = 6 + w
-        await session.submit_number(Participant.A, 5, turn_id=turn_id)
-        await session.submit_number(Participant.B, 5, turn_id=turn_id)
+        await session.submit_number(Participant.A, 6, turn_id=turn_id)
+        await session.submit_number(Participant.B, 6, turn_id=turn_id)
 
     # 10 wickets lost: All Out!
     assert session.stage == RoomStage.INNINGS_BREAK

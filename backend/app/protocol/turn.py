@@ -117,11 +117,11 @@ class Turn:
         return self._choice_b is not None
 
     def submit_choice(self, participant: Participant, number: int) -> bool:
-        """Submit a 1-6 number choice for a participant.
+        """Submit a number choice (1, 2, 3, 4, 6) for a participant.
 
         Args:
             participant: Participant.A or Participant.B.
-            number: Integer between 1 and 6.
+            number: Integer in (1, 2, 3, 4, 6).
 
         Returns:
             True if this submission completed the turn, False otherwise.

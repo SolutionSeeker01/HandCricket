@@ -46,11 +46,12 @@ def test_initial_batting_state():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("runs", [1, 2, 4, 6])
+@pytest.mark.parametrize("runs", [1, 2, 3, 4, 6])
 def test_scoring_updates_striker_and_total(runs: int):
     """Verify that runs update both the individual striker's score and total runs."""
     state = BattingState()
-    ball = BallResult(batsman_choice=runs, bowler_choice=runs % 6 + 1, runs=runs, is_wicket=False)
+    bowler_choice = 2 if runs != 2 else 1
+    ball = BallResult(batsman_choice=runs, bowler_choice=bowler_choice, runs=runs, is_wicket=False)
 
     initial_striker = state.striker
     state.record_ball(ball)
@@ -63,18 +64,18 @@ def test_scoring_updates_striker_and_total(runs: int):
 
 
 # ---------------------------------------------------------------------------
-# 3. Odd-Run Swapping (1, 3, 5)
+# 3. Odd-Run Swapping (1, 3)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("odd_runs", [1, 3, 5])
+@pytest.mark.parametrize("odd_runs", [1, 3])
 def test_odd_runs_swap_striker_and_non_striker(odd_runs: int):
-    """Odd runs (1, 3, 5) must swap the striker and non-striker."""
+    """Odd runs (1, 3) must swap the striker and non-striker."""
     state = BattingState()
     assert state.striker == 1
     assert state.non_striker == 2
 
-    ball = BallResult(batsman_choice=odd_runs, bowler_choice=odd_runs % 6 + 1, runs=odd_runs, is_wicket=False)
+    ball = BallResult(batsman_choice=odd_runs, bowler_choice=2, runs=odd_runs, is_wicket=False)
     state.record_ball(ball)
 
     # Ends must be swapped
@@ -97,7 +98,7 @@ def test_even_runs_do_not_swap_striker(even_runs: int):
     assert state.striker == 1
     assert state.non_striker == 2
 
-    ball = BallResult(batsman_choice=even_runs, bowler_choice=even_runs % 6 + 1, runs=even_runs, is_wicket=False)
+    ball = BallResult(batsman_choice=even_runs, bowler_choice=1, runs=even_runs, is_wicket=False)
     state.record_ball(ball)
 
     # Striker remains the same
@@ -142,7 +143,7 @@ def test_wicket_dismisses_striker_and_brings_next_batsman():
 def test_consecutive_wickets():
     """Verify state when multiple wickets fall in succession."""
     state = BattingState()
-    wicket_ball = BallResult(batsman_choice=5, bowler_choice=5, runs=0, is_wicket=True)
+    wicket_ball = BallResult(batsman_choice=3, bowler_choice=3, runs=0, is_wicket=True)
 
     # Ball 1: Batsman 1 gets out -> Batsman 3 enters
     state.record_ball(wicket_ball)
@@ -197,8 +198,8 @@ def test_realistic_batting_sequence():
     assert state.striker == 1
     assert state.non_striker == 2
 
-    # Ball 5: Batsman 1 gets OUT! (matched choice 5 vs 5)
-    state.record_ball(resolve_ball(5, 5))
+    # Ball 5: Batsman 1 gets OUT! (matched choice 3 vs 3)
+    state.record_ball(resolve_ball(3, 3))
     assert state.wickets == 1
     assert state.total_runs == 10
     assert state.is_dismissed(1) is True

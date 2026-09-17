@@ -7,6 +7,8 @@ server-authoritative WebSocket game protocol in Slice 10.
 import json
 from typing import Any, Dict, Optional
 
+from backend.app.engine.ball import VALID_BALL_CHOICES
+
 # Protocol message types
 TYPE_TURN_STARTED: str = "turn_started"
 TYPE_SUBMIT_NUMBER: str = "submit_number"
@@ -176,10 +178,10 @@ def parse_client_message(raw_text: str) -> Dict[str, Any]:
                 f"Invalid choice {number!r}: choice must be an integer, got {type(number).__name__}.",
             )
 
-        if number < 1 or number > 6:
+        if number not in VALID_BALL_CHOICES:
             raise TurnProtocolError(
                 "invalid_number",
-                f"Invalid choice {number}: choice must be between 1 and 6.",
+                f"Invalid choice {number}: choice must be one of {list(VALID_BALL_CHOICES)}.",
             )
 
         res: Dict[str, Any] = {

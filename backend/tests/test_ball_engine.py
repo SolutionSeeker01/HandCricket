@@ -4,6 +4,7 @@ from dataclasses import FrozenInstanceError
 import pytest
 
 from backend.app.engine.ball import (
+    VALID_BALL_CHOICES,
     BallResult,
     InvalidBallChoiceError,
     resolve_ball,
@@ -12,14 +13,14 @@ from backend.app.engine.ball import (
 
 
 # ---------------------------------------------------------------------------
-# 1. Comprehensive Matrix Test (All 36 Combinations)
+# 1. Comprehensive Matrix Test (All 25 Combinations)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("bat", range(1, 7))
-@pytest.mark.parametrize("bowl", range(1, 7))
-def test_all_36_ball_combinations(bat: int, bowl: int):
-    """Verify all 36 valid choice combinations (1..6 vs 1..6).
+@pytest.mark.parametrize("bat", VALID_BALL_CHOICES)
+@pytest.mark.parametrize("bowl", VALID_BALL_CHOICES)
+def test_all_25_ball_combinations(bat: int, bowl: int):
+    """Verify all 25 valid choice combinations from (1, 2, 3, 4, 6).
 
     - If bat == bowl: must be a wicket with 0 runs.
     - If bat != bowl: must not be a wicket with runs equal to bat.
@@ -62,8 +63,8 @@ def test_runs_unequal_choices():
 
 def test_wickets_equal_choices():
     """Verify specific examples of matching choices resulting in a wicket."""
-    # 5 vs 5 -> wicket
-    res1 = resolve_ball(5, 5)
+    # 4 vs 4 -> wicket
+    res1 = resolve_ball(4, 4)
     assert res1.runs == 0
     assert res1.is_wicket is True
 
@@ -88,13 +89,13 @@ def test_wickets_equal_choices():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("invalid_val", [0, -1, -99, 7, 8, 100])
+@pytest.mark.parametrize("invalid_val", [0, -1, -99, 5, 7, 8, 100])
 def test_rejects_out_of_range_values(invalid_val: int):
-    """Values below 1 or above 6 must raise InvalidBallChoiceError."""
-    with pytest.raises(InvalidBallChoiceError, match="choice must be between 1 and 6"):
+    """Values not in (1, 2, 3, 4, 6) must raise InvalidBallChoiceError."""
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
         resolve_ball(invalid_val, 3)
 
-    with pytest.raises(InvalidBallChoiceError, match="choice must be between 1 and 6"):
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
         resolve_ball(3, invalid_val)
 
 
@@ -140,8 +141,8 @@ def test_determinism():
     res_b = resolve_ball(4, 2)
     assert res_a == res_b
 
-    res_w1 = resolve_ball(5, 5)
-    res_w2 = resolve_ball(5, 5)
+    res_w1 = resolve_ball(6, 6)
+    res_w2 = resolve_ball(6, 6)
     assert res_w1 == res_w2
 
 
@@ -160,12 +161,12 @@ def test_ball_result_immutability():
 @pytest.mark.parametrize(
     "bat,bowl,runs,is_wicket",
     [
-        (3, 5, 0, False),   # unequal choices must award runs equal to bat (3)
+        (3, 4, 0, False),   # unequal choices must award runs equal to bat (3)
         (6, 1, 7, False),   # runs cannot exceed batsman choice
         (4, 2, 2, False),   # runs must be batsman choice, not bowler choice
         (4, 2, 4, True),    # unequal choices cannot be a wicket
-        (5, 5, 5, True),    # equal choices must have 0 runs
-        (5, 5, 0, False),   # equal choices must be a wicket
+        (6, 6, 6, True),    # equal choices must have 0 runs
+        (6, 6, 0, False),   # equal choices must be a wicket
         (3, 3, 1, True),    # wicket cannot award runs
     ],
 )
@@ -179,8 +180,10 @@ def test_ball_result_rejects_inconsistent_outcomes(bat, bowl, runs, is_wicket):
     "bat,bowl",
     [
         (0, 3),
+        (5, 3),
         (7, 3),
         (3, -1),
+        (3, 5),
         (3, 8),
         (True, 3),
         (3, False),
@@ -202,4 +205,27 @@ def test_ball_result_rejects_invalid_attribute_types():
 
     with pytest.raises(InvalidBallChoiceError, match="is_wicket must be a boolean"):
         BallResult(batsman_choice=4, bowler_choice=2, runs=4, is_wicket=0)  # type: ignore
+
+
+# ---------------------------------------------------------------------------
+# 6. Explicit Rejection of Choice 5
+# ---------------------------------------------------------------------------
+
+
+def test_choice_5_is_explicitly_rejected():
+    """Verify that choice 5 is authoritatively rejected as an invalid gameplay choice."""
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
+        validate_choice(5, role="batsman")
+
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
+        validate_choice(5, role="bowler")
+
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
+        resolve_ball(5, 2)
+
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
+        resolve_ball(2, 5)
+
+    with pytest.raises(InvalidBallChoiceError, match="choice must be one of"):
+        resolve_ball(5, 5)
 

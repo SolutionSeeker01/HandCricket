@@ -148,13 +148,13 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
             <div className="mt-4 space-y-3.5 text-sm text-slate-200">
               <div className="p-3 rounded-xl bg-white/5 border border-white/10">
-                <span className="font-black text-amber-400">1. Numbers (1 to 6):</span> In each delivery, both batter and bowler secretly choose a number from 1 to 6.
+                <span className="font-black text-amber-400">1. Numbers (1, 2, 3, 4, 6):</span> In each delivery, both batter and bowler secretly choose a number (1, 2, 3, 4, or 6).
               </div>
               <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
                 <span className="font-black text-rose-300">2. Wickets:</span> If both players choose the <span className="underline font-bold">exact same number</span>, the batter is OUT!
               </div>
               <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <span className="font-black text-emerald-300">3. Scoring Runs:</span> If the numbers differ, the batter scores their chosen number of runs (1, 2, 3, 4, 5, or 6).
+                <span className="font-black text-emerald-300">3. Scoring Runs:</span> If the numbers differ, the batter scores their chosen number of runs (1, 2, 3, 4, or 6).
               </div>
               <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
                 <span className="font-black text-amber-300">4. Match Structure:</span> 5 overs per side (6 balls per over). Each bowler can bowl at most 1 over (5 unique bowlers required).

@@ -815,14 +815,56 @@
 
 ---
 
+### Post-Shipping Cleanups & Rule Refinements (Dev2 & Main)
+
+* **Status**: COMPLETED & VERIFIED
+* **Timestamp**: 2026-09-17T23:35:00+05:30
+* **What was implemented**:
+  1. **Cleanup #1 — Over Display Progression at Innings End**:
+     * Fixed final over progression display so that when the 5th over completes (30th legal delivery), the scoreboard properly displays `5.0` overs rather than sticking at `4.0` or overflowing.
+     * Guaranteed that the 6 completed delivery dots remain rendered on the scorecard rather than being prematurely reset.
+  2. **Cleanup #2 — Unique Teams Invariant in Match Selection**:
+     * Enforced strict product invariant that duplicate teams are forbidden across all modes.
+     * Computer Mode bot chooser explicitly excludes the user's selected team.
+     * PreMatchSetup and Friend Mode protocol authoritatively reject duplicate team selections with `TurnProtocolError("duplicate_teams")`.
+  3. **Cleanup #3 — Removal of Internal / Development References from User-Facing UI**:
+     * Conducted audit and removed all references to sprint slices (e.g., "Slice 13"), development phases, or engineering terms from user-facing screens and modals.
+     * Updated marketing and settings copy: humanized match status strings and changed "authoritative cricket logic" to "authentic cricket rules".
+  4. **Cleanup #4 — Removal of Obsolete Same-Team Conflict Resolution**:
+     * Removed obsolete fallback/tie-breaker logic for same-team matches inside the lower-level Match engine since team uniqueness is guaranteed at setup and protocol boundaries.
+     * Maintained authoritative match completed payloads, winner representations, and forfeit semantics.
+  5. **Branch Integration**:
+     * Branch `Dev2` containing all four post-shipping cleanups was cleanly merged into `main`.
+     * Resolved integration mismatches in FriendArena and updated audit tests, concluding with merge commit `6d046b9`.
+  6. **Gameplay Rule Cleanup — Removal of Run/Choice 5 from Hand Cricket**:
+     * Authoritatively removed run/choice `5` from the gameplay domain. Valid choices are now strictly `{1, 2, 3, 4, 6}`.
+     * `validate_choice()` in `ball.py` raises `InvalidBallChoiceError` for `5` (and any non-integer or out-of-domain number).
+     * Protocol parser `parse_client_message()` in `messages.py` rejects incoming `submit_number` payloads with `number: 5`, responding with `TurnProtocolError("invalid_number", ...)`.
+     * `default_number_chooser()` in `computer.py` samples from `random.choice(VALID_BALL_CHOICES)`.
+     * Friend Mode turn timeout auto-picks and late fallbacks in `friend_game.py` sample from `secrets.choice(VALID_BALL_CHOICES)`.
+     * PitchArena keypad array updated to `[1, 2, 3, 4, 6]`. Button `5` is completely omitted from both Computer and Friend Mode arenas while preserving 1:1 circular aspect ratio.
+     * User-facing rules text updated in `LandingScreen.tsx` and `SettingsModal.tsx` to reflect numbers `1, 2, 3, 4, 6`.
+     * Protected non-choice uses of numeric 5 remain completely untouched (5 overs per side, 5 unique bowlers, Player #5 roster IDs, 10s timers, and fifty-run milestones).
+  7. **Redundant Helper Text Removal**:
+     * Removed redundant instructional lines `"Choose your number (1, 2, 3, 4, 6)"` and `"Choose your delivery (1, 2, 3, 4, 6)"` from both batting and bowling states in `PitchArena.tsx`.
+     * Preserved prominent headings ("YOUR SHOT" / "YOUR DELIVERY"), brush accent underlines, turn timer, and five-button keypad (`1, 2, 3, 4, 6`).
+* **Verification Results**:
+  * Backend Unit & Integration Tests: **578 passed** (`pytest backend/tests/`).
+  * Frontend Vitest Tests: **91 passed** (`npm.cmd test -- --run` in `frontend/`).
+  * Production Build: **Successful** (`npm.cmd run build` — TypeScript compiler and Vite bundle generated in 2.73s with zero errors).
+
+---
+
 ## Current Project Status
 
 * **Slice 1–12**: Completed & Approved
 * **Slice 13**: Completed & Approved
 * **Slice 13 Refinement**: Completed & Approved
-* **Slice 14 (Polish, Animations, Audio & Edge Cases)**: Completed (Awaiting Review)
-* **Friend Mode (Slice 15)**: Future Scope
-* **Production EC2 Deployment (Slice 16)**: Future Scope
+* **Slice 14 (Polish, Animations, Audio & Edge Cases)**: Completed & Approved
+* **Friend Mode (Slice 15)**: Completed & Verified
+* **Post-Shipping Cleanups #1–#4**: Completed & Merged into `main`
+* **Gameplay Choice 5 Removal & UI Polish**: Completed & Verified
+* **Production EC2 Deployment (Slice 16)**: Ready for Deployment
 
 
 
