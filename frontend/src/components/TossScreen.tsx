@@ -278,7 +278,7 @@ export const TossScreen: React.FC<TossScreenProps> = ({
 
       {/* Footer */}
       <footer className="relative z-10 w-full max-w-4xl pb-3 text-center text-xs text-slate-300/80 font-medium">
-        Hand Cricket Official • Server Authoritative Toss Engine
+        Hand Cricket Official • Match Toss
       </footer>
     </div>
   );

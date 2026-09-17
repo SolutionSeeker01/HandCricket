@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act, within } from '@testing-library/react';
+import App from './App';
 import { Header } from './components/Header';
 import { PitchArena } from './components/PitchArena';
 import { Scoreboard } from './components/Scoreboard';
@@ -12,6 +13,7 @@ import { TossScreen } from './components/TossScreen';
 import { BowlerPickerModal } from './components/BowlerPickerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { MatchState, TeamRoster } from './types';
+import * as cricketGameHook from './hooks/useCricketGame';
 import { useCricketGame } from './hooks/useCricketGame';
 import { soundManager } from './utils/sound';
 
@@ -94,6 +96,20 @@ describe('Slice 12 Frontend Component Tests', () => {
     // Non-striker: Virat Kohli 4 runs off 5 balls -> 4 (5)
     expect(screen.getAllByText('16 (9)').length).toBeGreaterThan(0);
     expect(screen.getAllByText('4 (5)').length).toBeGreaterThan(0);
+  });
+
+  it('Scoreboard displays (5.0 ov) badge and all six balls at completion of 5th over', () => {
+    const state5Overs: MatchState = {
+      ...mockMatchState,
+      overs: '5.0',
+      max_overs: 5,
+      current_over_balls: [1, 2, 4, 6, 0, 'W'],
+    };
+    render(<Scoreboard matchState={state5Overs} />);
+    expect(screen.getAllByText('(5.0 ov)').length).toBeGreaterThan(0);
+    expect(screen.queryByText('(4.0 ov)')).toBeNull();
+    expect(screen.getAllByText('W').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('6').length).toBeGreaterThan(0);
   });
 
   it('PitchArena renders 1-6 buttons and triggers onSelectNumber when clicked', () => {
@@ -810,6 +826,40 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
     const backBtn = screen.getByText(/← BACK/i);
     fireEvent.click(backBtn);
     expect(handleBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('TeamSelectionScreen marks disabled teams as unavailable, shows OPPONENT SELECTED, auto-switches default, and prevents selection', () => {
+    const handleSelect = vi.fn();
+    const mockTeams: TeamRoster[] = [
+      { id: 'IND', name: 'India', players: [{ id: 1, name: 'Rohit Sharma' }] },
+      { id: 'AUS', name: 'Australia', players: [{ id: 1, name: 'David Warner' }] },
+      { id: 'ENG', name: 'England', players: [{ id: 1, name: 'Jos Buttler' }] },
+      { id: 'SA', name: 'South Africa', players: [{ id: 1, name: 'Temba Bavuma' }] },
+    ];
+
+    render(
+      <TeamSelectionScreen
+        availableTeams={mockTeams}
+        disabledTeamIds={['IND']}
+        onSelectTeam={handleSelect}
+        onBack={vi.fn()}
+      />
+    );
+
+    // Verify OPPONENT SELECTED badge and LOCKED label appear for India
+    expect(screen.getByText('OPPONENT SELECTED')).toBeDefined();
+    expect(screen.getByText('LOCKED')).toBeDefined();
+
+    // Clicking India should NOT select India
+    fireEvent.click(screen.getAllByText('India')[0]);
+
+    // Click Proceed
+    const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+    fireEvent.click(proceedBtn);
+
+    // Selected team submitted should be AUS (first available), never IND
+    expect(handleSelect).toHaveBeenCalledWith('AUS');
+    expect(handleSelect).not.toHaveBeenCalledWith('IND');
   });
 
   it('TossScreen displays both teams and coin flip, then reveals user toss win with BAT and BOWL buttons', () => {
@@ -2091,6 +2141,127 @@ describe('Slice 14 Audio Preload: Early Crowd Buffer Decoding & Fallback Safety'
     const result = await soundManager.preloadAudio('nonexistent.wav');
     expect(result).toBeNull();
     expect(soundManager.isBufferLoaded('nonexistent.wav')).toBe(false);
+  });
+});
+
+describe('Cleanup #3: User-Facing String Hygiene & Internal Reference Removal', () => {
+  it('LandingScreen displays clean user-facing edition text and avoids internal sprint / socket references', () => {
+    render(<LandingScreen onPlayVsComputer={vi.fn()} onPlayWithFriend={vi.fn()} />);
+
+    // 1. Replacement wording is present
+    expect(screen.getByText('Hand Cricket Official • Live Match Edition')).toBeDefined();
+    expect(screen.getByText('Head-to-Head • Live Online')).toBeDefined();
+    expect(
+      screen.getByText(
+        'The nostalgic classroom finger cricket game, brought to life with authentic cricket rules.'
+      )
+    ).toBeDefined();
+
+    // 2. Old internal development references are absent
+    expect(screen.queryByText(/Slice 13/i)).toBeNull();
+    expect(screen.queryByText(/Dual Socket/i)).toBeNull();
+    expect(screen.queryByText(/authoritative cricket logic/i)).toBeNull();
+  });
+
+  it('TossScreen displays clean user-facing footer and avoids server engine phrasing', () => {
+    render(
+      <TossScreen
+        userTeam={{ id: 'IND', name: 'India' }}
+        opponentTeam={{ id: 'AUS', name: 'Australia' }}
+        tossWinner="user"
+        tossDecision={null}
+        onChooseToss={vi.fn()}
+        onProceed={vi.fn()}
+      />
+    );
+
+    // 1. Replacement wording is present
+    expect(screen.getByText('Hand Cricket Official • Match Toss')).toBeDefined();
+
+    // 2. Old internal phrasing is absent
+    expect(screen.queryByText(/Server Authoritative Toss Engine/i)).toBeNull();
+  });
+
+  it('SettingsModal humanizes raw match statuses cleanly', () => {
+    const { rerender } = render(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'IN_PROGRESS' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('In Progress')).toBeDefined();
+    expect(screen.queryByText('IN_PROGRESS')).toBeNull();
+
+    rerender(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'INNINGS_1' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+    expect(screen.getByText('1st Innings')).toBeDefined();
+    expect(screen.queryByText('INNINGS_1')).toBeNull();
+
+    rerender(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'INNINGS_BREAK' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Innings Break')).toBeDefined();
+    expect(screen.queryByText('INNINGS_BREAK')).toBeNull();
+
+    rerender(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'COMPLETED' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Match Completed')).toBeDefined();
+    expect(screen.queryByText('COMPLETED')).toBeNull();
+  });
+
+  it('App connection error fallback displays user-friendly internet connection guidance', () => {
+    const spy = vi.spyOn(cricketGameHook, 'useCricketGame').mockReturnValue({
+      connectionStatus: 'error',
+      errorMessage: null,
+      matchState: null,
+      preMatchState: null,
+      appStage: 'LANDING',
+      reconnect: vi.fn(),
+    } as any);
+
+    render(<App />);
+
+    // 1. Replacement wording is present
+    expect(
+      screen.getByText('Unable to connect to the game server. Please check your internet connection and try again.')
+    ).toBeDefined();
+
+    // 2. Old internal dev reference is absent
+    expect(screen.queryByText(/backend server is running/i)).toBeNull();
+
+    spy.mockRestore();
   });
 });
 

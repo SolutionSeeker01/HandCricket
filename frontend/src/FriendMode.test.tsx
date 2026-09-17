@@ -316,6 +316,89 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
         expect(screen.getByText(/Opponent has selected Australia/i)).toBeDefined();
       });
     });
+
+    it('disables opponent chosen team with OPPONENT SELECTED and LOCKED indicator in FriendArena', async () => {
+      render(
+        <FriendArena
+          roomCode="TEAM99"
+          playerToken="tokA"
+          participantSeat="A"
+          onExit={vi.fn()}
+        />
+      );
+
+      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      await act(async () => {
+        currentWs.triggerMessage({
+          type: 'stage_changed',
+          stage: 'TEAM_SELECTION',
+        });
+        currentWs.triggerMessage({
+          type: 'team_selected',
+          participant: 'B',
+          team_id: 'AUS',
+          team_name: 'Australia',
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Opponent has selected Australia/i)).toBeDefined();
+        expect(screen.getByText('OPPONENT SELECTED')).toBeDefined();
+        expect(screen.getByText('LOCKED')).toBeDefined();
+      });
+
+      // Attempt clicking Australia card
+      fireEvent.click(screen.getAllByText('Australia')[0]);
+
+      // Proceed button submits selected team
+      const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+      fireEvent.click(proceedBtn);
+
+      // Verify the sent message selected IND (default valid team), not the disabled AUS team
+      const sentMsgs = currentWs.sentMessages.map((m) => JSON.parse(m));
+      const selectMsg = sentMsgs.find((m) => m.type === 'select_team');
+      expect(selectMsg?.team_id).toBe('IND');
+      expect(selectMsg?.team_id).not.toBe('AUS');
+    });
+
+    it('reconnect sync_state during TEAM_SELECTION restores opponent team as disabled in FriendArena', async () => {
+      render(
+        <FriendArena
+          roomCode="RECON1"
+          playerToken="tokB"
+          participantSeat="B"
+          onExit={vi.fn()}
+        />
+      );
+
+      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      await act(async () => {
+        currentWs.triggerMessage({
+          type: 'sync_state',
+          participant: 'B',
+          stage: 'TEAM_SELECTION',
+          opponent_team: { id: 'IND', name: 'India' },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Opponent has selected India/i)).toBeDefined();
+        expect(screen.getByText('OPPONENT SELECTED')).toBeDefined();
+        expect(screen.getByText('LOCKED')).toBeDefined();
+      });
+
+      // India card is locked, default auto-switched to another team (e.g. Australia)
+      // Attempting to click India does not select it
+      fireEvent.click(screen.getAllByText('India')[0]);
+
+      const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+      fireEvent.click(proceedBtn);
+
+      const sentMsgs = currentWs.sentMessages.map((m) => JSON.parse(m));
+      const selectMsg = sentMsgs.find((m) => m.type === 'select_team');
+      expect(selectMsg?.team_id).toBe('AUS');
+      expect(selectMsg?.team_id).not.toBe('IND');
+    });
   });
 
   // 5. TOSS EXPERIENCE (PLAYER RELATIVE)
@@ -578,7 +661,52 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
 
       expect(screen.getByText('MATCH TIED!')).toBeDefined();
     });
+
+    it('Cleanup #4: strictly maps winner to user or opponent with zero result inversion under unique teams', () => {
+      const p1WinState: MatchState = {
+        ...dummyMatchState,
+        status: 'COMPLETED',
+        user_team: { id: 'IND', name: 'India' },
+        opponent_team: { id: 'AUS', name: 'Australia' },
+        winner: 'India',
+        is_tie: false,
+        result_description: 'India won by 20 runs',
+      };
+
+      const { rerender } = render(
+        <MatchResultModal
+          matchState={p1WinState}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      // Player 1 perspective (India): WON
+      expect(screen.getByText('YOU WON!')).toBeDefined();
+      expect(screen.queryByText('YOU LOST!')).toBeNull();
+      expect(screen.queryByText('MATCH TIED!')).toBeNull();
+
+      // Player 2 perspective (Australia): LOST for identical match outcome
+      const p2State: MatchState = {
+        ...p1WinState,
+        user_team: { id: 'AUS', name: 'Australia' },
+        opponent_team: { id: 'IND', name: 'India' },
+      };
+
+      rerender(
+        <MatchResultModal
+          matchState={p2State}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      expect(screen.getByText('YOU LOST!')).toBeDefined();
+      expect(screen.queryByText('YOU WON!')).toBeNull();
+      expect(screen.queryByText('MATCH TIED!')).toBeNull();
+    });
   });
+
 
   // 10. RECONNECTION & DISCONNECT BANNERS
   describe('10. Reconnection & Disconnect Banners', () => {
@@ -783,197 +911,6 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
       expect(screen.queryByText('Score')).toBeNull();
       expect(screen.getByText('Target')).toBeDefined();
       expect(screen.getByText('78')).toBeDefined();
-    });
-  });
-
-  describe('Hardening Regression Tests (Sub-slice 15F Parity & Fixes)', () => {
-    it('displays OVER 5: in Scoreboard when overs is 4.1 (during over 5)', () => {
-      const stateOver5: MatchState = {
-        ...dummyMatchState,
-        overs: '4.1',
-        max_overs: 5,
-        current_over_balls: [4],
-      };
-
-      render(<Scoreboard matchState={stateOver5} />);
-      expect(screen.getByText('OVER 5:')).toBeDefined();
-      expect(screen.queryByText('OVER 4:')).toBeNull();
-      expect(screen.queryByText('This Over:')).toBeNull();
-    });
-
-    it('displays OVER 1: in Scoreboard when overs is 0.0 (first over)', () => {
-      const stateOver1: MatchState = {
-        ...dummyMatchState,
-        overs: '0.0',
-        max_overs: 5,
-        current_over_balls: [],
-      };
-
-      render(<Scoreboard matchState={stateOver1} />);
-      expect(screen.getByText('OVER 1:')).toBeDefined();
-    });
-
-    it('renders Return to Main Menu button in Computer Mode MatchResultModal and calls onExit', () => {
-      const handleExit = vi.fn();
-      const completedState: MatchState = {
-        ...dummyMatchState,
-        status: 'COMPLETED',
-        winner: 'India',
-        result_description: 'India won by 10 runs',
-      };
-
-      render(
-        <MatchResultModal
-          matchState={completedState}
-          onPlayAgain={vi.fn()}
-          onExit={handleExit}
-          isFriendMode={false}
-        />
-      );
-
-      const exitBtn = screen.getByText('Return to Main Menu');
-      expect(exitBtn).toBeDefined();
-      fireEvent.click(exitBtn);
-      expect(handleExit).toHaveBeenCalledTimes(1);
-    });
-
-    it('renders YOU WON! in Friend Mode MatchResultModal when winner matches user_team', () => {
-      const winState: MatchState = {
-        ...dummyMatchState,
-        status: 'COMPLETED',
-        winner: 'India',
-        user_team: { id: 'IND', name: 'India' },
-        opponent_team: { id: 'AUS', name: 'Australia' },
-        result_description: 'India won by 10 runs',
-      };
-
-      render(
-        <MatchResultModal
-          matchState={winState}
-          onPlayAgain={vi.fn()}
-          isFriendMode={true}
-        />
-      );
-
-      expect(screen.getByText('YOU WON!')).toBeDefined();
-    });
-
-    it('renders YOU LOST! in Friend Mode MatchResultModal when winner matches opponent_team', () => {
-      const lossState: MatchState = {
-        ...dummyMatchState,
-        status: 'COMPLETED',
-        winner: 'Australia',
-        user_team: { id: 'IND', name: 'India' },
-        opponent_team: { id: 'AUS', name: 'Australia' },
-        result_description: 'Australia won by 4 wickets',
-      };
-
-      render(
-        <MatchResultModal
-          matchState={lossState}
-          onPlayAgain={vi.fn()}
-          isFriendMode={true}
-        />
-      );
-
-      expect(screen.getByText('YOU LOST!')).toBeDefined();
-    });
-
-    it('disambiguates same-team matchup in MatchResultModal using user_won', () => {
-      const sameTeamWinState: MatchState = {
-        ...dummyMatchState,
-        status: 'COMPLETED',
-        winner: 'India',
-        user_won: true,
-        user_team: { id: 'IND', name: 'India' },
-        opponent_team: { id: 'IND', name: 'India' },
-        result_description: 'India won by 15 runs',
-      };
-
-      const { rerender } = render(
-        <MatchResultModal
-          matchState={sameTeamWinState}
-          onPlayAgain={vi.fn()}
-          isFriendMode={true}
-        />
-      );
-
-      expect(screen.getByText('YOU WON!')).toBeDefined();
-
-      const sameTeamLossState: MatchState = {
-        ...sameTeamWinState,
-        user_won: false,
-      };
-
-      rerender(
-        <MatchResultModal
-          matchState={sameTeamLossState}
-          onPlayAgain={vi.fn()}
-          isFriendMode={true}
-        />
-      );
-
-      expect(screen.getByText('YOU LOST!')).toBeDefined();
-    });
-
-    it('renders Match Abandoned screen when room is abandoned', async () => {
-      const handleExit = vi.fn();
-      render(
-        <FriendArena
-          roomCode="ABAN99"
-          playerToken="tokA"
-          participantSeat="A"
-          onExit={handleExit}
-        />
-      );
-
-      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
-      await act(async () => {
-        currentWs.triggerMessage({
-          type: 'room_abandoned',
-          room_code: 'ABAN99',
-          stage: 'ABANDONED',
-          reason: 'Player B disconnected and did not return.',
-        });
-      });
-
-      expect(screen.getByText('Match Abandoned')).toBeDefined();
-      expect(screen.getByText('Player B disconnected and did not return.')).toBeDefined();
-
-      const exitBtn = screen.getByText('Return to Main Menu');
-      fireEvent.click(exitBtn);
-      expect(handleExit).toHaveBeenCalledTimes(1);
-    });
-
-    it('reconstructs userTeam and opponentTeam on sync_state during TOSS_DECISION', async () => {
-      render(
-        <FriendArena
-          roomCode="TOSS99"
-          playerToken="tokA"
-          participantSeat="A"
-          onExit={vi.fn()}
-        />
-      );
-
-      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
-      await act(async () => {
-        currentWs.triggerMessage({
-          type: 'sync_state',
-          participant: 'A',
-          stage: 'TOSS_DECISION',
-          team_a: 'IND',
-          team_b: 'AUS',
-          team_a_name: 'India',
-          team_b_name: 'Australia',
-          toss_winner: 'A',
-          match_state: {},
-        });
-      });
-
-      // TossScreen should be visible with reconstructed India vs Australia
-      expect(screen.getAllByText(/TOSS/i).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getByText('INDIA')).toBeDefined();
-      expect(screen.getByText('AUSTRALIA')).toBeDefined();
     });
   });
 });

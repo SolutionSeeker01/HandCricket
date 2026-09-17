@@ -53,7 +53,6 @@ export const FriendArena: React.FC<FriendArenaProps> = ({
     startNextInnings,
     requestRematch,
     leaveRoom,
-    reconnect,
   } = useFriendCricketGame({
     roomCode,
     playerToken,
@@ -82,44 +81,12 @@ export const FriendArena: React.FC<FriendArenaProps> = ({
         <p className="text-slate-400 text-sm max-w-xs mb-6">
           {errorMessage || 'Disconnected from Friend match.'}
         </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button
-            onClick={reconnect}
-            className="py-3 px-6 rounded-2xl font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
-          >
-            Retry Connection
-          </button>
-          <button
-            onClick={onExit}
-            className="py-3 px-6 rounded-2xl font-bold text-slate-300 bg-slate-800 hover:bg-slate-700 active:scale-95 border border-slate-700 transition-all cursor-pointer"
-          >
-            Return to Main Menu
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // 1b. Room Abandoned Screen
-  if (stage === 'ABANDONED') {
-    return (
-      <div className="relative min-h-screen w-full flex flex-col items-center justify-center p-6 bg-[url('/stadium_bg.jpg')] bg-cover bg-center text-white select-none">
-        <div className="absolute inset-0 bg-gradient-to-b from-slate-950/80 via-black/60 to-slate-950/90" />
-        <div className="relative z-10 w-full max-w-md bg-slate-900/90 border-2 border-rose-500/60 rounded-3xl p-6 sm:p-8 text-center shadow-2xl backdrop-blur-md">
-          <div className="text-5xl mb-3">⚠️</div>
-          <h2 className="text-2xl font-black text-rose-400 uppercase tracking-wide mb-2">
-            Match Abandoned
-          </h2>
-          <p className="text-slate-300 text-sm mb-6">
-            {errorMessage || 'The match was abandoned because a player disconnected and did not return.'}
-          </p>
-          <button
-            onClick={onExit}
-            className="w-full py-3.5 px-6 rounded-2xl font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-lg shadow-amber-500/20 transition-all cursor-pointer"
-          >
-            Return to Main Menu
-          </button>
-        </div>
+        <button
+          onClick={onExit}
+          className="py-3 px-6 rounded-2xl font-bold text-slate-950 bg-amber-400 hover:bg-amber-300 active:scale-95 shadow-lg shadow-amber-500/20 transition-all"
+        >
+          Return to Main Menu
+        </button>
       </div>
     );
   }
@@ -199,6 +166,7 @@ export const FriendArena: React.FC<FriendArenaProps> = ({
         )}
         <TeamSelectionScreen
           availableTeams={[]}
+          disabledTeamIds={opponentTeam ? [opponentTeam.id] : []}
           onSelectTeam={selectTeam}
           onBack={onExit}
           isLoading={false}

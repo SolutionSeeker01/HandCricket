@@ -37,7 +37,7 @@ class PreMatchSetup:
     Invariants:
     - Participants are strictly Participant.A and Participant.B.
     - Each participant selects a valid predefined team.
-    - Both participants may select the same team.
+    - Participant A and Participant B must select distinct teams (duplicate selection is prohibited).
     - Toss is managed via Toss engine.
     - Match cannot be started until both teams are selected and toss is completed.
     - All exposed team and toss objects are immutable.
@@ -106,7 +106,8 @@ class PreMatchSetup:
             The resolved Team instance.
 
         Raises:
-            PreMatchError: If toss is already in progress or completed (team selection is locked).
+            PreMatchError: If toss is already in progress or completed (team selection is locked),
+                or if the team has already been selected by the other participant.
             InvalidParticipantError: If participant is invalid.
             TeamNotFoundError: If team is unknown or invalid.
         """
@@ -142,6 +143,13 @@ class PreMatchSetup:
         else:
             raise TeamNotFoundError(
                 f"Invalid team parameter {team!r}: must be Team instance or team ID string."
+            )
+
+        other_part = Participant.B if participant == Participant.A else Participant.A
+        other_team = self._team_b if participant == Participant.A else self._team_a
+        if other_team is not None and other_team.id == resolved_team.id:
+            raise PreMatchError(
+                f"Team '{resolved_team.name}' has already been selected by Participant {other_part.value}."
             )
 
         if participant == Participant.A:

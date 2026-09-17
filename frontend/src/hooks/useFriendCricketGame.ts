@@ -51,10 +51,6 @@ export function useFriendCricketGame({
   const [opponentRematchRequested, setOpponentRematchRequested] = useState<boolean>(false);
 
   const socketRef = useRef<WebSocket | null>(null);
-  const participantRef = useRef<'A' | 'B' | null>(participantSeat);
-  const currentTurnIdRef = useRef<number | null>(null);
-  const handleServerMessageRef = useRef<(msg: any) => void>(() => {});
-  const connectWsRef = useRef<() => void>(() => {});
   const countdownIntervalRef = useRef<number | null>(null);
   const turnStartTimeRef = useRef<number | null>(null);
   const turnTotalSecondsRef = useRef<number>(10);
@@ -67,10 +63,6 @@ export function useFriendCricketGame({
   const isUnmountedRef = useRef<boolean>(false);
   const isStartingInningsRef = useRef<boolean>(false);
   const lastUrgentSecondRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    participantRef.current = participant;
-  }, [participant]);
 
   const stopCountdown = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -152,7 +144,7 @@ export function useFriendCricketGame({
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          handleServerMessageRef.current(msg);
+          handleServerMessage(msg);
         } catch (e) {
           console.error('Failed to parse WebSocket message', e);
         }
@@ -181,7 +173,6 @@ export function useFriendCricketGame({
       };
     };
 
-    connectWsRef.current = connectWs;
     connectWs();
 
     return () => {
@@ -198,17 +189,14 @@ export function useFriendCricketGame({
   }, [roomCode, playerToken]);
 
   const handleServerMessage = (msg: any) => {
-    const currPart = participantRef.current ?? participant;
     switch (msg.type) {
       case 'room_joined':
         setParticipant(msg.participant);
-        participantRef.current = msg.participant;
         setStage(msg.stage);
         break;
 
       case 'sync_state': {
         setParticipant(msg.participant);
-        participantRef.current = msg.participant;
         setStage(msg.stage);
         setConnectionStatus('connected');
 
@@ -217,25 +205,15 @@ export function useFriendCricketGame({
         }
 
         // Restore team selection if present
-        if (msg.match_state?.user_team) {
-          setUserTeam(msg.match_state.user_team);
-          userTeamRef.current = msg.match_state.user_team;
-        } else if (msg.team_a && msg.team_b) {
-          const isA = currPart === 'A';
-          const uTeam = isA
-            ? { id: msg.team_a, name: msg.team_a_name || msg.team_a }
-            : { id: msg.team_b, name: msg.team_b_name || msg.team_b };
-          const oTeam = isA
-            ? { id: msg.team_b, name: msg.team_b_name || msg.team_b }
-            : { id: msg.team_a, name: msg.team_a_name || msg.team_a };
-          setUserTeam(uTeam);
-          userTeamRef.current = uTeam;
-          setOpponentTeam(oTeam);
-          opponentTeamRef.current = oTeam;
+        const restoredUserTeam = msg.user_team || msg.match_state?.user_team;
+        if (restoredUserTeam) {
+          setUserTeam(restoredUserTeam);
+          userTeamRef.current = restoredUserTeam;
         }
-        if (msg.match_state?.opponent_team) {
-          setOpponentTeam(msg.match_state.opponent_team);
-          opponentTeamRef.current = msg.match_state.opponent_team;
+        const restoredOpponentTeam = msg.opponent_team || msg.match_state?.opponent_team;
+        if (restoredOpponentTeam) {
+          setOpponentTeam(restoredOpponentTeam);
+          opponentTeamRef.current = restoredOpponentTeam;
         }
         if (msg.toss_winner) {
           setTossWinner(msg.toss_winner);
@@ -247,7 +225,7 @@ export function useFriendCricketGame({
         // Restore match state
         if (msg.match_state && Object.keys(msg.match_state).length > 0) {
           const userIsBatting = (msg.match_state.batting_participant ?? msg.batting_participant) !== undefined
-            ? (msg.match_state.batting_participant ?? msg.batting_participant) === currPart
+            ? (msg.match_state.batting_participant ?? msg.batting_participant) === participant
             : Boolean(msg.match_state.user_is_batting);
           const resolvedUserTeam = userTeamRef.current ?? msg.match_state.user_team ?? (userIsBatting ? msg.match_state.batting_team : msg.match_state.bowling_team);
           const resolvedOpponentTeam = opponentTeamRef.current ?? msg.match_state.opponent_team ?? (userIsBatting ? msg.match_state.bowling_team : msg.match_state.batting_team);
@@ -261,7 +239,6 @@ export function useFriendCricketGame({
 
         // Restore turn state
         if (msg.current_turn_id) {
-          currentTurnIdRef.current = msg.current_turn_id;
           setCurrentTurnId(msg.current_turn_id);
           setHasSubmitted(Boolean(msg.has_submitted));
           setOpponentSubmitted(Boolean(msg.opponent_submitted));
@@ -287,11 +264,11 @@ export function useFriendCricketGame({
 
         // Restore innings break & rematch readiness
         if (Array.isArray(msg.innings_break_ready)) {
-          setInningsBreakReady(msg.innings_break_ready.includes(currPart));
+          setInningsBreakReady(msg.innings_break_ready.includes(participant));
         }
         if (Array.isArray(msg.rematch_ready)) {
-          setRematchRequested(msg.rematch_ready.includes(currPart));
-          const opp = currPart === 'A' ? 'B' : 'A';
+          setRematchRequested(msg.rematch_ready.includes(participant));
+          const opp = participant === 'A' ? 'B' : 'A';
           setOpponentRematchRequested(msg.rematch_ready.includes(opp));
         }
         break;
@@ -312,7 +289,7 @@ export function useFriendCricketGame({
         break;
 
       case 'team_selected':
-        if (msg.participant === currPart) {
+        if (msg.participant === participant) {
           const uTeam = { id: msg.team_id, name: msg.team_name };
           setUserTeam(uTeam);
           userTeamRef.current = uTeam;
@@ -331,7 +308,6 @@ export function useFriendCricketGame({
         setBowlerSelector(null);
         setBowlerSelectionPrompt(null);
         setMatchState(null);
-        currentTurnIdRef.current = null;
         setCurrentTurnId(null);
         setSelectedNumber(null);
         setHasSubmitted(false);
@@ -360,7 +336,7 @@ export function useFriendCricketGame({
       case 'match_started': {
         setStage('IN_MATCH');
         const ms = msg.match_state;
-        const userIsBatting = msg.batting_participant === currPart;
+        const userIsBatting = msg.batting_participant === participant;
         const resolvedUserTeam = userTeamRef.current ?? (userIsBatting ? msg.batting_team : msg.bowling_team);
         const resolvedOpponentTeam = opponentTeamRef.current ?? (userIsBatting ? msg.bowling_team : msg.batting_team);
         setMatchState({
@@ -373,11 +349,10 @@ export function useFriendCricketGame({
         break;
       }
 
-      case 'turn_started': {
-        if (currentTurnIdRef.current !== null && typeof msg.turn_id === 'number' && msg.turn_id < currentTurnIdRef.current) {
+      case 'turn_started':
+        if (currentTurnId !== null && typeof msg.turn_id === 'number' && msg.turn_id < currentTurnId) {
           return;
         }
-        currentTurnIdRef.current = msg.turn_id;
         setCurrentTurnId(msg.turn_id);
         setSelectedNumber(null);
         setHasSubmitted(false);
@@ -389,7 +364,7 @@ export function useFriendCricketGame({
           setMatchState((prev) => {
             if (!prev) return null;
             const isUserBatting = (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) !== undefined
-              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === currPart
+              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === participant
               : prev.user_is_batting;
             return {
               ...prev,
@@ -402,10 +377,9 @@ export function useFriendCricketGame({
         }
         startCountdown(msg.timeout_seconds || 10);
         break;
-      }
 
       case 'number_submitted':
-        if (msg.participant === currPart) {
+        if (msg.participant === participant) {
           setHasSubmitted(true);
         } else {
           setOpponentSubmitted(true);
@@ -413,7 +387,7 @@ export function useFriendCricketGame({
         break;
 
       case 'ball_result': {
-        if (currentTurnIdRef.current !== null && typeof msg.turn_id === 'number' && msg.turn_id < currentTurnIdRef.current) {
+        if (currentTurnId !== null && typeof msg.turn_id === 'number' && msg.turn_id < currentTurnId) {
           return;
         }
         stopCountdown();
@@ -482,7 +456,7 @@ export function useFriendCricketGame({
           }
         }
 
-        const userTimedOut = currPart === 'A' ? Boolean(msg.a_timed_out) : Boolean(msg.b_timed_out);
+        const userTimedOut = participant === 'A' ? Boolean(msg.a_timed_out) : Boolean(msg.b_timed_out);
 
         setEventFeedback({
           type: fbType,
@@ -491,8 +465,8 @@ export function useFriendCricketGame({
           subtitle,
           number: runs,
           batsmanChoice: msg.batsman_choice,
-          userChoice: currPart === 'A' ? msg.choice_a : msg.choice_b,
-          computerChoice: currPart === 'A' ? msg.choice_b : msg.choice_a,
+          userChoice: participant === 'A' ? msg.choice_a : msg.choice_b,
+          computerChoice: participant === 'A' ? msg.choice_b : msg.choice_a,
           userTimedOut,
         });
 
@@ -526,7 +500,7 @@ export function useFriendCricketGame({
           setMatchState((prev) => {
             if (!prev) return null;
             const isUserBatting = (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) !== undefined
-              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === currPart
+              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === participant
               : prev.user_is_batting;
             return {
               ...prev,
@@ -558,7 +532,7 @@ export function useFriendCricketGame({
           setMatchState((prev) => {
             if (!prev) return null;
             const isUserBatting = (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) !== undefined
-              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === currPart
+              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === participant
               : prev.user_is_batting;
             return {
               ...prev,
@@ -575,15 +549,7 @@ export function useFriendCricketGame({
       case 'match_completed': {
         stopCountdown();
         setStage('MATCH_COMPLETED');
-        const currUName = userTeamRef.current?.name ?? userTeam?.name;
-        const userWon = !msg.is_tie && (
-          msg.winner_participant !== undefined
-            ? (currPart && msg.winner_participant === currPart)
-            : (msg.match_state?.user_won !== undefined
-              ? Boolean(msg.match_state.user_won)
-              : ((currPart && msg.winner === currPart) ||
-                 (currUName && msg.winner === currUName)))
-        );
+        const userWon = Boolean(userTeam && msg.winner === userTeam.name);
         if (userWon) {
           soundManager.playMatchWin();
         } else if (!msg.is_tie) {
@@ -593,7 +559,7 @@ export function useFriendCricketGame({
           setMatchState((prev) => {
             if (!prev) return null;
             const isUserBatting = (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) !== undefined
-              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === currPart
+              ? (msg.match_state.batting_participant ?? msg.batting_participant ?? prev.batting_participant) === participant
               : prev.user_is_batting;
             return {
               ...prev,
@@ -609,13 +575,13 @@ export function useFriendCricketGame({
       }
 
       case 'innings_break_acknowledged':
-        if (msg.participant === currPart || (Array.isArray(msg.ready_participants) && msg.ready_participants.includes(currPart))) {
+        if (msg.participant === participant || (Array.isArray(msg.ready_participants) && msg.ready_participants.includes(participant))) {
           setInningsBreakReady(true);
         }
         break;
 
       case 'rematch_requested':
-        if (msg.participant === currPart) {
+        if (msg.participant === participant) {
           setRematchRequested(true);
         } else {
           setOpponentRematchRequested(true);
@@ -637,8 +603,6 @@ export function useFriendCricketGame({
         break;
     }
   };
-
-  handleServerMessageRef.current = handleServerMessage;
 
   // Client actions
   const selectTeam = (teamId: string) => {
@@ -681,32 +645,16 @@ export function useFriendCricketGame({
 
   const startNextInnings = () => {
     if (isStartingInningsRef.current) return;
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      setErrorMessage('Not connected to game server.');
-      return;
-    }
     soundManager.playClick();
     isStartingInningsRef.current = true;
+    setInningsBreakReady(true);
     setTimeout(() => {
       isStartingInningsRef.current = false;
     }, 2000);
-    socketRef.current.send(JSON.stringify({ type: 'start_innings_2' }));
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      socketRef.current.send(JSON.stringify({ type: 'start_innings_2' }));
+    }
   };
-
-  const reconnect = useCallback(() => {
-    reconnectAttemptRef.current = 0;
-    if (reconnectTimeoutRef.current) {
-      window.clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
-    }
-    if (socketRef.current) {
-      socketRef.current.close();
-      socketRef.current = null;
-    }
-    setConnectionStatus('connecting');
-    setErrorMessage(null);
-    connectWsRef.current();
-  }, []);
 
   const requestRematch = () => {
     soundManager.playClick();
@@ -755,7 +703,6 @@ export function useFriendCricketGame({
     startNextInnings,
     requestRematch,
     leaveRoom,
-    reconnect,
     onLeave,
   };
 }

@@ -482,10 +482,25 @@ class FriendGameSession:
                     f"Cannot select team in stage {self._room.stage.value}.",
                 )
 
+            other_part = (
+                Participant.B if participant == Participant.A else Participant.A
+            )
+            other_team = self._pre_match.get_team_for_participant(other_part)
+            if (
+                other_team is not None
+                and other_team.id.upper() == team_id.strip().upper()
+            ):
+                raise TurnProtocolError(
+                    "team_already_selected",
+                    f"Team '{other_team.name}' has already been selected by your opponent. Please choose a different team.",
+                )
+
             try:
                 team = self._pre_match.select_team(participant, team_id)
-            except (TeamNotFoundError, PreMatchError) as err:
+            except TeamNotFoundError as err:
                 raise TurnProtocolError("invalid_team", str(err))
+            except PreMatchError as err:
+                raise TurnProtocolError("team_already_selected", str(err))
 
             self._room.last_activity_at = time.monotonic()
 
@@ -1325,12 +1340,10 @@ class FriendGameSession:
 
         score = active_innings.total_runs if active_innings else 0
         wickets = active_innings.wickets if active_innings else 0
-        balls_in_over = (
-            active_innings.balls_in_current_over if active_innings else 0
-        )
-        completed_overs = (
-            active_innings.current_over - 1 if active_innings else 0
-        )
+        total_balls = active_innings.total_balls if active_innings else 0
+        bpo = active_innings.balls_per_over if active_innings else 6
+        completed_overs = total_balls // bpo
+        balls_in_over = total_balls % bpo
         overs_str = f"{completed_overs}.{balls_in_over}"
 
         striker_info: Dict[str, Any] = {"name": "", "runs": 0, "balls": 0}
@@ -1558,6 +1571,25 @@ class FriendGameSession:
 
         ms_dict = self.get_match_state_dict(participant)
 
+        u_t = (
+            self._pre_match.team_a
+            if participant == Participant.A
+            else self._pre_match.team_b
+        )
+        o_t = (
+            self._pre_match.team_b
+            if participant == Participant.A
+            else self._pre_match.team_a
+        )
+        user_team_info = {"id": u_t.id, "name": u_t.name} if u_t else None
+        opponent_team_info = {"id": o_t.id, "name": o_t.name} if o_t else None
+
+        if not ms_dict and (user_team_info or opponent_team_info):
+            ms_dict = {
+                "user_team": user_team_info,
+                "opponent_team": opponent_team_info,
+            }
+
         innings_num = 1
         if self._match:
             if self._match.status == MatchStatus.INNINGS_1:
@@ -1602,6 +1634,8 @@ class FriendGameSession:
             "participant": participant.value,
             "opponent_connected": opponent_connected,
             "stage": self._room.stage.value,
+            "user_team": user_team_info,
+            "opponent_team": opponent_team_info,
             "match_state": ms_dict,
             "innings": innings_num,
             "batting_participant": batting_part.value,

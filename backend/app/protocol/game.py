@@ -64,6 +64,11 @@ class ComputerGameSession:
         computer_decision_chooser: Optional[Callable[[], TossDecision]] = None,
         computer_bowler_chooser: Optional[Callable[[List[int]], int]] = None,
     ) -> None:
+        if skip_pre_match and user_team_id.strip().upper() == opponent_team_id.strip().upper():
+            raise TurnProtocolError(
+                "duplicate_teams",
+                f"User team {user_team_id!r} and opponent team {opponent_team_id!r} must be distinct.",
+            )
         self._user_team: Team = get_team(user_team_id)
         self._opponent_team: Team = get_team(opponent_team_id)
         self._timeout_seconds: float = timeout_seconds
@@ -208,12 +213,31 @@ class ComputerGameSession:
             return self._computer_decision_chooser()
         return random.choice([TossDecision.BAT, TossDecision.BOWL])
 
-    def _choose_computer_team(self) -> str:
-        """Select a predefined team for the computer."""
+    def _choose_computer_team(self, exclude_team_id: Optional[str] = None) -> str:
+        """Select a predefined team for the computer, excluding the user's team.
+
+        Args:
+            exclude_team_id: Optional team ID that cannot be chosen for the computer.
+
+        Returns:
+            String team ID of the chosen computer team.
+
+        Raises:
+            TurnProtocolError: If no eligible teams remain after excluding the user's team.
+        """
         if self._computer_team_chooser is not None:
             return self._computer_team_chooser()
-        teams = get_teams()
-        return random.choice(teams).id
+        excluded_norm = exclude_team_id.strip().upper() if exclude_team_id else None
+        available_teams = [
+            t for t in get_teams()
+            if excluded_norm is None or t.id.upper() != excluded_norm
+        ]
+        if not available_teams:
+            raise TurnProtocolError(
+                "no_available_teams",
+                f"No eligible teams available for the computer after excluding {exclude_team_id!r}.",
+            )
+        return random.choice(available_teams).id
 
     # ---------------------------------------------------------------------------
     # Pre-Match Flow Methods
@@ -239,7 +263,7 @@ class ComputerGameSession:
             self._user_team = self._pre_match.team_a
 
             # Server chooses computer team and assigns to Participant B
-            comp_team_id = self._choose_computer_team()
+            comp_team_id = self._choose_computer_team(exclude_team_id=user_team_id)
             self._pre_match.select_team(Participant.B, comp_team_id)
             self._opponent_team = self._pre_match.team_b
 
@@ -487,10 +511,10 @@ class ComputerGameSession:
         # Current score & wickets
         score = active_innings.total_runs if active_innings else 0
         wickets = active_innings.wickets if active_innings else 0
-        balls_in_over = active_innings.balls_in_current_over if active_innings else 0
-        completed_overs = (
-            active_innings.current_over - 1 if active_innings else 0
-        )
+        total_balls = active_innings.total_balls if active_innings else 0
+        bpo = active_innings.balls_per_over if active_innings else 6
+        completed_overs = total_balls // bpo
+        balls_in_over = total_balls % bpo
         overs_str = f"{completed_overs}.{balls_in_over}"
 
         # Batters (Striker and Non-Striker)
@@ -568,14 +592,6 @@ class ComputerGameSession:
         else:
             status_str = "INNINGS_2"
 
-        winner_side = getattr(self._match, "winner_side", None)
-        if self._match and self._match.is_completed and not self._match.is_tie:
-            user_won = (winner_side == 1) if self._user_is_batting_first else (winner_side == 2)
-            winner_participant = "user" if user_won else "computer"
-        else:
-            user_won = False
-            winner_participant = None
-
         return {
             "status": status_str,
             "innings": innings_num,
@@ -603,9 +619,6 @@ class ComputerGameSession:
             "innings_2_wickets": self._match.innings_2_wickets,
             "last_ball": self._last_ball_info,
             "winner": self._match.winner,
-            "winner_side": winner_side,
-            "winner_participant": winner_participant,
-            "user_won": user_won,
             "is_tie": self._match.is_tie,
             "result_description": self._match.result_description,
             "turn_id": self._turn_number,
@@ -845,9 +858,10 @@ class ComputerGameSession:
 
         # Check over completion
         if active_innings and active_innings.over_complete:
-            self._current_over_balls = []
-            # Rotate bowler if neither innings nor match is complete
             if not active_innings.is_completed and not self._match.is_completed:
+                self._current_over_balls = []
+            # Rotate bowler if innings is not complete
+            if not active_innings.is_completed:
                 active_bowling = (
                     self._match.bowling_1 if innings_num == 1 else self._match.bowling_2
                 )

@@ -1,12 +1,14 @@
 """Tests for Friend Mode WebSocket lifecycle and pre-match synchronization (Slice 15B)."""
 
+import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.engine.toss import Participant
 from backend.app.main import app
 from backend.app.protocol.friend_game import FriendGameSession
-from backend.app.protocol.room import RoomStage
+from backend.app.protocol.messages import TurnProtocolError
+from backend.app.protocol.room import FriendGameRoom, PlayerSlot, RoomStage
 from backend.app.protocol.room_manager import RoomManager, reset_room_manager
 
 
@@ -257,3 +259,174 @@ def test_friend_game_ping_and_query_mode(client: TestClient):
         ws.send_text("ping")
         resp = ws.receive_text()
         assert resp == "pong"
+
+
+@pytest.mark.anyio
+async def test_friend_mode_over_progression_monotonic_to_5_0(manager: RoomManager):
+    """Verify Friend Mode over progression:
+    - Normal over progression across overs
+    - 4.4 -> 4.5
+    - Final ball produces 5.0 (never 4.0)
+    - All 6 ball indicators remain present upon innings completion.
+    """
+    from backend.app.protocol.room import FriendGameRoom, PlayerSlot, RoomStage
+
+    room = FriendGameRoom(room_code="TEST01", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room=room, max_overs=5)
+
+    sent_a = []
+    class MockWs:
+        async def send_json(self, msg):
+            sent_a.append(msg)
+    session._sockets[Participant.A] = MockWs()
+    session._sockets[Participant.B] = MockWs()
+
+    await session.select_team(Participant.A, "IND")
+    await session.select_team(Participant.B, "AUS")
+    session._pre_match._toss._winner = Participant.A
+    await session.choose_toss(Participant.A, "BAT")
+    await session.select_bowler(Participant.B, 11)
+
+    for ball in range(1, 31):
+        tid = session._current_turn.turn_id
+        sent_a.clear()
+        await session.submit_number(Participant.A, 1, tid)
+        await session.submit_number(Participant.B, 6, tid)
+
+        # Grab ball_result message
+        ball_msg = next(m for m in sent_a if m.get("type") == "ball_result")
+        ms = ball_msg["match_state"]
+
+        if ball < 30:
+            expected_overs = f"{ball // 6}.{ball % 6}"
+            assert ms["overs"] == expected_overs
+        else:
+            # Ball 30 (final ball of 5th over)
+            assert ms["overs"] == "5.0"
+            assert ms["overs"] != "4.0"
+            assert ms["status"] == "INNINGS_BREAK"
+            assert len(ms["current_over_balls"]) == 6
+
+        if session.room.stage == RoomStage.BOWLER_SELECTION:
+            for m in sent_a:
+                if m.get("type") == "bowler_selection_required":
+                    selector = Participant(m["bowler_selector"])
+                    next_b = m["eligible_bowlers"][0]["id"]
+                    await session.select_bowler(selector, next_b)
+                    break
+
+
+@pytest.mark.anyio
+async def test_friend_mode_rejects_duplicate_team_selection_player_b():
+    """Cleanup #2: Player B cannot select the team Player A already chose."""
+    room = FriendGameRoom(room_code="ROOM01", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room)
+
+    # Player A chooses India
+    await session.select_team(Participant.A, "IND")
+    assert session.room.stage == RoomStage.TEAM_SELECTION
+
+    # Player B attempts to choose India
+    with pytest.raises(TurnProtocolError) as exc_info:
+        await session.select_team(Participant.B, "IND")
+    assert exc_info.value.code == "team_already_selected"
+    assert "already been selected" in exc_info.value.message
+
+    # Room remains in TEAM_SELECTION so Player B can choose another team
+    assert session.room.stage == RoomStage.TEAM_SELECTION
+
+    # Player B chooses Australia -> successfully advances to toss
+    await session.select_team(Participant.B, "AUS")
+    assert session.room.stage == RoomStage.TOSS_DECISION
+
+
+@pytest.mark.anyio
+async def test_friend_mode_rejects_duplicate_team_selection_player_a():
+    """Cleanup #2: Player A cannot select the team Player B already chose."""
+    room = FriendGameRoom(room_code="ROOM02", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room)
+
+    # Player B chooses Australia first
+    await session.select_team(Participant.B, "AUS")
+    assert session.room.stage == RoomStage.TEAM_SELECTION
+
+    # Player A attempts to choose Australia
+    with pytest.raises(TurnProtocolError) as exc_info:
+        await session.select_team(Participant.A, "AUS")
+    assert exc_info.value.code == "team_already_selected"
+    assert "already been selected" in exc_info.value.message
+
+    # Room remains in TEAM_SELECTION
+    assert session.room.stage == RoomStage.TEAM_SELECTION
+
+    # Player A chooses India -> advances to toss
+    await session.select_team(Participant.A, "IND")
+    assert session.room.stage == RoomStage.TOSS_DECISION
+
+
+@pytest.mark.anyio
+async def test_friend_mode_accepts_distinct_team_selections():
+    """Cleanup #2: Distinct team selections are accepted and advance to toss."""
+    room = FriendGameRoom(room_code="ROOM03", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room)
+
+    await session.select_team(Participant.A, "IND")
+    await session.select_team(Participant.B, "SA")
+    assert session.room.stage == RoomStage.TOSS_DECISION
+
+
+@pytest.mark.anyio
+async def test_friend_mode_simultaneous_duplicate_selection():
+    """Cleanup #2: Near-simultaneous duplicate selections are serialized by lock; exactly one succeeds."""
+    room = FriendGameRoom(room_code="ROOM04", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room)
+
+    results = await asyncio.gather(
+        session.select_team(Participant.A, "IND"),
+        session.select_team(Participant.B, "IND"),
+        return_exceptions=True,
+    )
+
+    # Exactly one succeeded (None) and exactly one raised TurnProtocolError("team_already_selected")
+    successes = [r for r in results if not isinstance(r, Exception)]
+    errors = [r for r in results if isinstance(r, TurnProtocolError)]
+
+    assert len(successes) == 1
+    assert len(errors) == 1
+    assert errors[0].code == "team_already_selected"
+
+    # Both sides do not have the same team
+    team_a = session._pre_match.team_a
+    team_b = session._pre_match.team_b
+    assert (team_a is None) != (team_b is None)
+
+
+@pytest.mark.anyio
+async def test_friend_mode_reconnect_sync_preserves_opponent_team_during_selection():
+    """Cleanup #2: State synchronization preserves opponent's chosen team during TEAM_SELECTION."""
+    room = FriendGameRoom(room_code="ROOM05", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room)
+
+    # Player A selects India
+    await session.select_team(Participant.A, "IND")
+
+    # Player B requests sync state
+    sync_b = session.get_sync_state_dict(Participant.B)
+    assert sync_b["opponent_team"] is not None
+    assert sync_b["opponent_team"]["id"] == "IND"
+    assert sync_b["match_state"]["opponent_team"]["id"] == "IND"
+    assert sync_b["user_team"] is None
+
+

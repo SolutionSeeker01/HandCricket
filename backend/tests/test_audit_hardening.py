@@ -12,6 +12,7 @@ from backend.app.engine.toss import Participant
 from backend.app.main import app
 from backend.app.protocol.friend_game import FriendGameSession
 from backend.app.protocol.game import ComputerGameSession
+from backend.app.protocol.messages import TurnProtocolError
 from backend.app.protocol.room import FriendGameRoom, RoomStage
 from backend.app.protocol.room_manager import RoomManager, reset_room_manager
 from backend.app.transport.websocket import reset_standalone_computer_session
@@ -84,39 +85,22 @@ def test_isolated_computer_sessions_concurrency():
 
 
 # ==============================================================================
-# 2. SAME-TEAM MATCH DISAMBIGUATION (HIGH 3)
+# 2. SAME-TEAM MATCH PROHIBITION & REJECTION (CLEANUP #2 & #4)
 # ==============================================================================
 
 
 @pytest.mark.anyio
 async def test_same_team_match_disambiguation_computer():
-    """India vs India match in ComputerGameSession properly reports user_won and winner_side."""
-    session = ComputerGameSession(user_team_id="IND", opponent_team_id="IND", skip_pre_match=True)
-    assert session._match is not None
-    assert session.user_team.name == session.opponent_team.name
-
-    # User batted first by default in skip_pre_match (side 1)
-    session._match.forfeit(winner="India", description="User won", winner_side=1)
-
-    ms = session.get_match_state_dict()
-    assert ms["winner"] == "India"
-    assert ms["winner_side"] == 1
-    assert ms["user_won"] is True
-    assert ms["winner_participant"] == "user"
-
-    # Now simulate Team 2 (computer) winning in fresh session
-    session2 = ComputerGameSession(user_team_id="IND", opponent_team_id="IND", skip_pre_match=True)
-    assert session2._match is not None
-    session2._match.forfeit(winner="India", description="Computer won", winner_side=2)
-    ms2 = session2.get_match_state_dict()
-    assert ms2["winner_side"] == 2
-    assert ms2["user_won"] is False
-    assert ms2["winner_participant"] == "computer"
+    """Cleanup #4: ComputerGameSession in direct mode rejects identical user and opponent teams."""
+    with pytest.raises(TurnProtocolError) as exc_info:
+        ComputerGameSession(user_team_id="IND", opponent_team_id="IND", skip_pre_match=True)
+    assert exc_info.value.code == "duplicate_teams"
+    assert "must be distinct" in str(exc_info.value.message)
 
 
 @pytest.mark.anyio
 async def test_same_team_match_disambiguation_friend(manager: RoomManager):
-    """India vs India match in FriendGameSession properly differentiates winner between A and B."""
+    """Cleanup #2: FriendGameSession authoritatively rejects duplicate team selection by opponent."""
     room, token_a = await manager.create_room("SAME01")
     slot_b, token_b = await manager.join_room("SAME01")
     session = room.get_or_create_session(disconnect_grace_seconds=1.0, toss_chooser=lambda: Participant.A)
@@ -127,29 +111,11 @@ async def test_same_team_match_disambiguation_friend(manager: RoomManager):
     await session.register_connection(Participant.B, ws_b)
 
     await session.select_team(Participant.A, "IND")
-    await session.select_team(Participant.B, "IND")
+    with pytest.raises(TurnProtocolError) as exc_info:
+        await session.select_team(Participant.B, "IND")
+    assert exc_info.value.code == "team_already_selected"
+    assert "already been selected" in str(exc_info.value.message)
 
-    await session.choose_toss(Participant.A, "BAT")
-    assert room.stage == RoomStage.BOWLER_SELECTION
-    assert session.bowler_selector == Participant.B
-    assert session._match is None
-
-    bowler_id = session._pre_match.bowling_first_team.players[0].id
-    await session.select_bowler(Participant.B, bowler_id)
-    assert session._match is not None
-
-    session._match.forfeit(winner="India", description="Player A won", winner_side=1)
-
-    ms_a = session.get_match_state_dict(Participant.A)
-    ms_b = session.get_match_state_dict(Participant.B)
-
-    assert ms_a["winner_side"] == 1
-    assert ms_a["winner_participant"] == "A"
-    assert ms_a["user_won"] is True
-
-    assert ms_b["winner_side"] == 1
-    assert ms_b["winner_participant"] == "A"
-    assert ms_b["user_won"] is False
 
 
 # ==============================================================================
