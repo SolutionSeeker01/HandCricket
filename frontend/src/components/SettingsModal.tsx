@@ -10,6 +10,23 @@ interface SettingsModalProps {
   onToggleMute?: () => void;
 }
 
+const formatMatchStatus = (status: string): string => {
+  switch (status) {
+    case 'INNINGS_1':
+      return '1st Innings';
+    case 'INNINGS_2':
+      return '2nd Innings';
+    case 'IN_PROGRESS':
+      return 'In Progress';
+    case 'INNINGS_BREAK':
+      return 'Innings Break';
+    case 'COMPLETED':
+      return 'Match Completed';
+    default:
+      return status.replace(/_/g, ' ');
+  }
+};
+
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   matchState,
@@ -56,7 +73,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             <div className="flex justify-between items-center text-slate-300">
               <span>Current Status:</span>
               <span className="font-bold text-sky-400">
-                {matchState.status}
+                {formatMatchStatus(matchState.status)}
               </span>
             </div>
             <div className="flex justify-between items-center text-slate-300">

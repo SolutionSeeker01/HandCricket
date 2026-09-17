@@ -94,7 +94,7 @@ export default function App() {
         <div className="text-5xl mb-3">📡</div>
         <h2 className="text-2xl font-bold text-white mb-2">Connection Issue</h2>
         <p className="text-slate-400 text-sm max-w-xs mb-6">
-          {errorMessage || 'Unable to connect to the Hand Cricket server. Please ensure the backend server is running.'}
+          {errorMessage || 'Unable to connect to the game server. Please check your internet connection and try again.'}
         </p>
         <button
           onClick={reconnect}

@@ -27,7 +27,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
           HAND CRICKET
         </h1>
         <p className="text-slate-300 text-sm sm:text-base font-medium max-w-md mt-2 drop-shadow-md">
-          The nostalgic classroom finger cricket game, brought to life with pure authoritative cricket logic.
+          The nostalgic classroom finger cricket game, brought to life with authentic cricket rules.
         </p>
       </header>
 
@@ -104,7 +104,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
           <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
             <span className="text-xs font-bold text-purple-300 tracking-wide uppercase">
-              Head-to-Head • Dual Socket
+              Head-to-Head • Live Online
             </span>
             {onPlayWithFriend ? (
               <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-black text-sm tracking-wide shadow-md group-hover:brightness-110">
@@ -121,7 +121,7 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
 
       {/* Footer & How to Play modal toggle */}
       <footer className="relative z-10 w-full max-w-4xl pb-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-400 border-t border-white/10 pt-4">
-        <div>Hand Cricket Official • Slice 13 Pre-Match</div>
+        <div>Hand Cricket Official • Live Match Edition</div>
         <button
           onClick={() => setShowRules(true)}
           className="text-amber-400 hover:text-amber-300 font-bold underline underline-offset-4 cursor-pointer transition-colors"

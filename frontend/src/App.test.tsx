@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, renderHook, act, within } from '@testing-library/react';
+import App from './App';
 import { Header } from './components/Header';
 import { PitchArena } from './components/PitchArena';
 import { Scoreboard } from './components/Scoreboard';
@@ -12,6 +13,7 @@ import { TossScreen } from './components/TossScreen';
 import { BowlerPickerModal } from './components/BowlerPickerModal';
 import { SettingsModal } from './components/SettingsModal';
 import { MatchState, TeamRoster } from './types';
+import * as cricketGameHook from './hooks/useCricketGame';
 import { useCricketGame } from './hooks/useCricketGame';
 import { soundManager } from './utils/sound';
 
@@ -2139,6 +2141,127 @@ describe('Slice 14 Audio Preload: Early Crowd Buffer Decoding & Fallback Safety'
     const result = await soundManager.preloadAudio('nonexistent.wav');
     expect(result).toBeNull();
     expect(soundManager.isBufferLoaded('nonexistent.wav')).toBe(false);
+  });
+});
+
+describe('Cleanup #3: User-Facing String Hygiene & Internal Reference Removal', () => {
+  it('LandingScreen displays clean user-facing edition text and avoids internal sprint / socket references', () => {
+    render(<LandingScreen onPlayVsComputer={vi.fn()} onPlayWithFriend={vi.fn()} />);
+
+    // 1. Replacement wording is present
+    expect(screen.getByText('Hand Cricket Official • Live Match Edition')).toBeDefined();
+    expect(screen.getByText('Head-to-Head • Live Online')).toBeDefined();
+    expect(
+      screen.getByText(
+        'The nostalgic classroom finger cricket game, brought to life with authentic cricket rules.'
+      )
+    ).toBeDefined();
+
+    // 2. Old internal development references are absent
+    expect(screen.queryByText(/Slice 13/i)).toBeNull();
+    expect(screen.queryByText(/Dual Socket/i)).toBeNull();
+    expect(screen.queryByText(/authoritative cricket logic/i)).toBeNull();
+  });
+
+  it('TossScreen displays clean user-facing footer and avoids server engine phrasing', () => {
+    render(
+      <TossScreen
+        userTeam={{ id: 'IND', name: 'India' }}
+        opponentTeam={{ id: 'AUS', name: 'Australia' }}
+        tossWinner="user"
+        tossDecision={null}
+        onChooseToss={vi.fn()}
+        onProceed={vi.fn()}
+      />
+    );
+
+    // 1. Replacement wording is present
+    expect(screen.getByText('Hand Cricket Official • Match Toss')).toBeDefined();
+
+    // 2. Old internal phrasing is absent
+    expect(screen.queryByText(/Server Authoritative Toss Engine/i)).toBeNull();
+  });
+
+  it('SettingsModal humanizes raw match statuses cleanly', () => {
+    const { rerender } = render(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'IN_PROGRESS' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText('In Progress')).toBeDefined();
+    expect(screen.queryByText('IN_PROGRESS')).toBeNull();
+
+    rerender(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'INNINGS_1' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+    expect(screen.getByText('1st Innings')).toBeDefined();
+    expect(screen.queryByText('INNINGS_1')).toBeNull();
+
+    rerender(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'INNINGS_BREAK' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Innings Break')).toBeDefined();
+    expect(screen.queryByText('INNINGS_BREAK')).toBeNull();
+
+    rerender(
+      <SettingsModal
+        isOpen={true}
+        matchState={{
+          ...mockMatchState,
+          status: 'COMPLETED' as any,
+        }}
+        onClose={vi.fn()}
+        onResetMatch={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Match Completed')).toBeDefined();
+    expect(screen.queryByText('COMPLETED')).toBeNull();
+  });
+
+  it('App connection error fallback displays user-friendly internet connection guidance', () => {
+    const spy = vi.spyOn(cricketGameHook, 'useCricketGame').mockReturnValue({
+      connectionStatus: 'error',
+      errorMessage: null,
+      matchState: null,
+      preMatchState: null,
+      appStage: 'LANDING',
+      reconnect: vi.fn(),
+    } as any);
+
+    render(<App />);
+
+    // 1. Replacement wording is present
+    expect(
+      screen.getByText('Unable to connect to the game server. Please check your internet connection and try again.')
+    ).toBeDefined();
+
+    // 2. Old internal dev reference is absent
+    expect(screen.queryByText(/backend server is running/i)).toBeNull();
+
+    spy.mockRestore();
   });
 });
 
