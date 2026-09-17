@@ -176,6 +176,10 @@ class Match:
             raise MatchError(f"Invalid team_1 {team_1!r}: must be a non-empty string.")
         if not isinstance(team_2, str) or not team_2.strip():
             raise MatchError(f"Invalid team_2 {team_2!r}: must be a non-empty string.")
+        if team_1.strip().casefold() == team_2.strip().casefold():
+            raise MatchError(
+                f"Invalid teams: team_1 {team_1!r} and team_2 {team_2!r} must be distinct."
+            )
         if isinstance(max_overs, bool) or not isinstance(max_overs, int) or max_overs < 1:
             raise MatchError(f"Invalid max_overs {max_overs!r}: must be an integer >= 1.")
         if isinstance(balls_per_over, bool) or not isinstance(balls_per_over, int) or balls_per_over < 1:

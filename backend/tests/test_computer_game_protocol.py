@@ -504,4 +504,18 @@ def test_computer_mode_over_progression_monotonic_to_5_0():
     asyncio.run(_run())
 
 
+def test_computer_session_direct_mode_rejects_same_teams():
+    """Cleanup #4: ComputerGameSession in skip_pre_match direct mode rejects identical team IDs."""
+    with pytest.raises(TurnProtocolError) as exc_info:
+        ComputerGameSession(user_team_id="IND", opponent_team_id="IND", skip_pre_match=True)
+    assert exc_info.value.code == "duplicate_teams"
+    assert "must be distinct" in str(exc_info.value.message)
+
+    # Case-insensitive
+    with pytest.raises(TurnProtocolError) as exc_info:
+        ComputerGameSession(user_team_id="ind", opponent_team_id="IND", skip_pre_match=True)
+    assert exc_info.value.code == "duplicate_teams"
+
+
+
 

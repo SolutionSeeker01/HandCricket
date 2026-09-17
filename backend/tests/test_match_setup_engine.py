@@ -2,7 +2,7 @@
 
 import pytest
 
-from backend.app.engine.match import Match
+from backend.app.engine.match import Match, MatchError
 from backend.app.engine.pre_match import (
     PreMatchError,
     PreMatchSetup,
@@ -334,11 +334,14 @@ def test_pre_match_constructor_rejects_same_teams():
     assert "has already been selected" in str(exc_info.value)
 
 
-def test_direct_match_engine_supports_same_team_names_until_cleanup_4():
-    """Verify Match domain engine still handles same team names directly until Cleanup #4."""
-    match = Match(team_1="India", team_2="India")
-    assert match.team_1 == "India"
-    assert match.team_2 == "India"
-    match.start_match()
-    assert match.batting_team == "India"
-    assert match.bowling_team == "India"
+def test_direct_match_engine_rejects_same_team_names():
+    """Cleanup #4: Match constructor raises MatchError if team_1 and team_2 are identical."""
+    with pytest.raises(MatchError) as exc_info:
+        Match(team_1="India", team_2="India")
+    assert "must be distinct" in str(exc_info.value)
+
+    # Also case-insensitive and whitespace-insensitive
+    with pytest.raises(MatchError):
+        Match(team_1="India", team_2="india")
+    with pytest.raises(MatchError):
+        Match(team_1="India", team_2=" INDIA ")

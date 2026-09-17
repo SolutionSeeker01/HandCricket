@@ -549,9 +549,7 @@ export function useFriendCricketGame({
       case 'match_completed': {
         stopCountdown();
         setStage('MATCH_COMPLETED');
-        const userWon = (participant === 'A' && msg.winner === 'A') ||
-                        (participant === 'B' && msg.winner === 'B') ||
-                        (userTeam && msg.winner === userTeam.name);
+        const userWon = Boolean(userTeam && msg.winner === userTeam.name);
         if (userWon) {
           soundManager.playMatchWin();
         } else if (!msg.is_tie) {

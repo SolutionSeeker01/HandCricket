@@ -64,6 +64,11 @@ class ComputerGameSession:
         computer_decision_chooser: Optional[Callable[[], TossDecision]] = None,
         computer_bowler_chooser: Optional[Callable[[List[int]], int]] = None,
     ) -> None:
+        if skip_pre_match and user_team_id.strip().upper() == opponent_team_id.strip().upper():
+            raise TurnProtocolError(
+                "duplicate_teams",
+                f"User team {user_team_id!r} and opponent team {opponent_team_id!r} must be distinct.",
+            )
         self._user_team: Team = get_team(user_team_id)
         self._opponent_team: Team = get_team(opponent_team_id)
         self._timeout_seconds: float = timeout_seconds

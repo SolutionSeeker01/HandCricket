@@ -117,12 +117,22 @@ def test_initial_match_state():
         ("Team A", "Team B", True, 5, 6),
         ("Team A", "Team B", 11, True, 6),
         ("Team A", "Team B", 11, 5, True),
+        ("Team A", "Team A", 11, 5, 6),
+        ("India", "india", 11, 5, 6),
+        ("India", " INDIA ", 11, 5, 6),
     ],
 )
 def test_constructor_argument_validation(t1, t2, size, overs, balls):
     """Constructor validates team names, over limits, ball limits, and quota viability."""
     with pytest.raises(MatchError):
         Match(team_1=t1, team_2=t2, team_size=size, max_overs=overs, balls_per_over=balls)  # type: ignore
+
+
+def test_constructor_rejects_identical_team_names():
+    """Cleanup #4: Match constructor raises MatchError if team_1 and team_2 are identical."""
+    with pytest.raises(MatchError) as exc_info:
+        Match(team_1="India", team_2="India")
+    assert "must be distinct" in str(exc_info.value)
 
 
 # ===========================================================================

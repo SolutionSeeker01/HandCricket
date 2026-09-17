@@ -661,7 +661,52 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
 
       expect(screen.getByText('MATCH TIED!')).toBeDefined();
     });
+
+    it('Cleanup #4: strictly maps winner to user or opponent with zero result inversion under unique teams', () => {
+      const p1WinState: MatchState = {
+        ...dummyMatchState,
+        status: 'COMPLETED',
+        user_team: { id: 'IND', name: 'India' },
+        opponent_team: { id: 'AUS', name: 'Australia' },
+        winner: 'India',
+        is_tie: false,
+        result_description: 'India won by 20 runs',
+      };
+
+      const { rerender } = render(
+        <MatchResultModal
+          matchState={p1WinState}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      // Player 1 perspective (India): WON
+      expect(screen.getByText('YOU WON!')).toBeDefined();
+      expect(screen.queryByText('YOU LOST!')).toBeNull();
+      expect(screen.queryByText('MATCH TIED!')).toBeNull();
+
+      // Player 2 perspective (Australia): LOST for identical match outcome
+      const p2State: MatchState = {
+        ...p1WinState,
+        user_team: { id: 'AUS', name: 'Australia' },
+        opponent_team: { id: 'IND', name: 'India' },
+      };
+
+      rerender(
+        <MatchResultModal
+          matchState={p2State}
+          onPlayAgain={vi.fn()}
+          isFriendMode={true}
+        />
+      );
+
+      expect(screen.getByText('YOU LOST!')).toBeDefined();
+      expect(screen.queryByText('YOU WON!')).toBeNull();
+      expect(screen.queryByText('MATCH TIED!')).toBeNull();
+    });
   });
+
 
   // 10. RECONNECTION & DISCONNECT BANNERS
   describe('10. Reconnection & Disconnect Banners', () => {
