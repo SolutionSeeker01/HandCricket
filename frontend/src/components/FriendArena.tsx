@@ -166,6 +166,7 @@ export const FriendArena: React.FC<FriendArenaProps> = ({
         )}
         <TeamSelectionScreen
           availableTeams={[]}
+          disabledTeamIds={opponentTeam ? [opponentTeam.id] : []}
           onSelectTeam={selectTeam}
           onBack={onExit}
           isLoading={false}

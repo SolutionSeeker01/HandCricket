@@ -7,6 +7,7 @@ interface TeamSelectionScreenProps {
   onSelectTeam: (teamId: string) => void;
   onBack: () => void;
   isLoading?: boolean;
+  disabledTeamIds?: string[];
 }
 
 const TEAM_DETAILS: Record<string, { color: string; stars: string; highlight: string }> = {
@@ -37,10 +38,8 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
   onSelectTeam,
   onBack,
   isLoading = false,
+  disabledTeamIds = [],
 }) => {
-  const [selectedTeamId, setSelectedTeamId] = useState<string>('IND');
-  const [viewingSquadId, setViewingSquadId] = useState<string | null>(null);
-
   // Fallback teams if list empty yet
   const teamsToDisplay = availableTeams.length > 0
     ? availableTeams
@@ -51,8 +50,27 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
         { id: 'SA', name: 'South Africa', players: [] },
       ];
 
+  const getInitialTeamId = (): string => {
+    if (!disabledTeamIds.includes('IND')) return 'IND';
+    const firstAvailable = teamsToDisplay.find((t) => !disabledTeamIds.includes(t.id));
+    return firstAvailable ? firstAvailable.id : '';
+  };
+
+  const [selectedTeamId, setSelectedTeamId] = useState<string>(getInitialTeamId);
+  const [viewingSquadId, setViewingSquadId] = useState<string | null>(null);
+
+  // Auto-switch away from any newly disabled team
+  React.useEffect(() => {
+    if (disabledTeamIds.includes(selectedTeamId)) {
+      const nextAvailable = teamsToDisplay.find((t) => !disabledTeamIds.includes(t.id));
+      if (nextAvailable) {
+        setSelectedTeamId(nextAvailable.id);
+      }
+    }
+  }, [disabledTeamIds, selectedTeamId, teamsToDisplay]);
+
   const handleContinue = () => {
-    if (selectedTeamId && !isLoading) {
+    if (selectedTeamId && !isLoading && !disabledTeamIds.includes(selectedTeamId)) {
       onSelectTeam(selectedTeamId);
     }
   };
@@ -83,6 +101,7 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
       <main className="relative z-10 w-full max-w-4xl my-auto py-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
         {teamsToDisplay.map((team) => {
           const isSelected = team.id === selectedTeamId;
+          const isDisabled = disabledTeamIds.includes(team.id);
           const meta = TEAM_DETAILS[team.id] || {
             flag: <div className="w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center font-bold">{team.id}</div>,
             color: 'from-slate-900 to-slate-950',
@@ -93,26 +112,40 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
           return (
             <div
               key={team.id}
-              onClick={() => setSelectedTeamId(team.id)}
+              onClick={() => {
+                if (!isDisabled) setSelectedTeamId(team.id);
+              }}
               role="button"
-              tabIndex={0}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedTeamId(team.id); }}
-              className={`relative flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br ${meta.color} border-2 transition-all duration-200 cursor-pointer backdrop-blur-md ${
-                isSelected
-                  ? 'border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.4)] scale-[1.02]'
-                  : 'border-white/15 hover:border-white/40 hover:bg-white/5 opacity-80 hover:opacity-100'
+              tabIndex={isDisabled ? -1 : 0}
+              aria-disabled={isDisabled}
+              onKeyDown={(e) => {
+                if (!isDisabled && (e.key === 'Enter' || e.key === ' ')) {
+                  setSelectedTeamId(team.id);
+                }
+              }}
+              className={`relative flex items-center justify-between p-4 sm:p-5 rounded-2xl bg-gradient-to-br ${meta.color} border-2 transition-all duration-200 backdrop-blur-md ${
+                isDisabled
+                  ? 'opacity-40 border-slate-700/40 cursor-not-allowed grayscale-[25%]'
+                  : isSelected
+                  ? 'border-amber-400 shadow-[0_0_30px_rgba(245,158,11,0.4)] scale-[1.02] cursor-pointer'
+                  : 'border-white/15 hover:border-white/40 hover:bg-white/5 opacity-80 hover:opacity-100 cursor-pointer'
               }`}
             >
               <div className="flex items-center gap-4">
                 <TeamFlagBadge id={team.id} className="w-12 h-12" />
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="text-xl sm:text-2xl font-black text-white tracking-wide">
                       {team.name}
                     </h3>
                     <span className="px-2 py-0.5 rounded bg-white/10 text-[11px] font-black text-amber-300">
                       {team.id}
                     </span>
+                    {isDisabled && (
+                      <span className="px-2 py-0.5 rounded bg-red-950/90 border border-red-500/60 text-[10px] font-black tracking-wider uppercase text-red-300 shadow-sm animate-pulse">
+                        OPPONENT SELECTED
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-slate-300 mt-1 font-medium">
                     Key: {meta.highlight}
@@ -132,15 +165,21 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
 
               {/* Selection Indicator */}
               <div className="flex flex-col items-center justify-center">
-                <div
-                  className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isSelected
-                      ? 'border-amber-400 bg-amber-400 text-slate-950 font-black text-sm shadow-md shadow-amber-400/50'
-                      : 'border-white/30 bg-black/20'
-                  }`}
-                >
-                  {isSelected ? '✓' : ''}
-                </div>
+                {isDisabled ? (
+                  <div className="px-2 py-1 rounded-lg bg-black/40 border border-red-500/40 text-red-400 font-black text-[10px] uppercase tracking-wider">
+                    LOCKED
+                  </div>
+                ) : (
+                  <div
+                    className={`w-7 h-7 rounded-full border-2 flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'border-amber-400 bg-amber-400 text-slate-950 font-black text-sm shadow-md shadow-amber-400/50'
+                        : 'border-white/30 bg-black/20'
+                    }`}
+                  >
+                    {isSelected ? '✓' : ''}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -164,9 +203,9 @@ export const TeamSelectionScreen: React.FC<TeamSelectionScreenProps> = ({
 
           <button
             onClick={handleContinue}
-            disabled={!selectedTeamId || isLoading}
+            disabled={!selectedTeamId || isLoading || disabledTeamIds.includes(selectedTeamId)}
             className={`px-6 sm:px-8 py-3 rounded-xl font-black text-xs sm:text-sm tracking-wider uppercase transition-all shadow-lg flex items-center gap-2 ${
-              selectedTeamId && !isLoading
+              selectedTeamId && !isLoading && !disabledTeamIds.includes(selectedTeamId)
                 ? 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-slate-950 shadow-amber-500/30 hover:shadow-amber-500/50 cursor-pointer transform hover:scale-[1.02]'
                 : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/10'
             }`}

@@ -205,13 +205,15 @@ export function useFriendCricketGame({
         }
 
         // Restore team selection if present
-        if (msg.match_state?.user_team) {
-          setUserTeam(msg.match_state.user_team);
-          userTeamRef.current = msg.match_state.user_team;
+        const restoredUserTeam = msg.user_team || msg.match_state?.user_team;
+        if (restoredUserTeam) {
+          setUserTeam(restoredUserTeam);
+          userTeamRef.current = restoredUserTeam;
         }
-        if (msg.match_state?.opponent_team) {
-          setOpponentTeam(msg.match_state.opponent_team);
-          opponentTeamRef.current = msg.match_state.opponent_team;
+        const restoredOpponentTeam = msg.opponent_team || msg.match_state?.opponent_team;
+        if (restoredOpponentTeam) {
+          setOpponentTeam(restoredOpponentTeam);
+          opponentTeamRef.current = restoredOpponentTeam;
         }
         if (msg.toss_winner) {
           setTossWinner(msg.toss_winner);

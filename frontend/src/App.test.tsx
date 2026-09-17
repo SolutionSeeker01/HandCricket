@@ -826,6 +826,40 @@ describe('Slice 13 Pre-Match Flows Frontend Component Tests', () => {
     expect(handleBack).toHaveBeenCalledTimes(1);
   });
 
+  it('TeamSelectionScreen marks disabled teams as unavailable, shows OPPONENT SELECTED, auto-switches default, and prevents selection', () => {
+    const handleSelect = vi.fn();
+    const mockTeams: TeamRoster[] = [
+      { id: 'IND', name: 'India', players: [{ id: 1, name: 'Rohit Sharma' }] },
+      { id: 'AUS', name: 'Australia', players: [{ id: 1, name: 'David Warner' }] },
+      { id: 'ENG', name: 'England', players: [{ id: 1, name: 'Jos Buttler' }] },
+      { id: 'SA', name: 'South Africa', players: [{ id: 1, name: 'Temba Bavuma' }] },
+    ];
+
+    render(
+      <TeamSelectionScreen
+        availableTeams={mockTeams}
+        disabledTeamIds={['IND']}
+        onSelectTeam={handleSelect}
+        onBack={vi.fn()}
+      />
+    );
+
+    // Verify OPPONENT SELECTED badge and LOCKED label appear for India
+    expect(screen.getByText('OPPONENT SELECTED')).toBeDefined();
+    expect(screen.getByText('LOCKED')).toBeDefined();
+
+    // Clicking India should NOT select India
+    fireEvent.click(screen.getAllByText('India')[0]);
+
+    // Click Proceed
+    const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+    fireEvent.click(proceedBtn);
+
+    // Selected team submitted should be AUS (first available), never IND
+    expect(handleSelect).toHaveBeenCalledWith('AUS');
+    expect(handleSelect).not.toHaveBeenCalledWith('IND');
+  });
+
   it('TossScreen displays both teams and coin flip, then reveals user toss win with BAT and BOWL buttons', () => {
     vi.useFakeTimers();
     const handleChoice = vi.fn();

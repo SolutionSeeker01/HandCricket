@@ -208,12 +208,31 @@ class ComputerGameSession:
             return self._computer_decision_chooser()
         return random.choice([TossDecision.BAT, TossDecision.BOWL])
 
-    def _choose_computer_team(self) -> str:
-        """Select a predefined team for the computer."""
+    def _choose_computer_team(self, exclude_team_id: Optional[str] = None) -> str:
+        """Select a predefined team for the computer, excluding the user's team.
+
+        Args:
+            exclude_team_id: Optional team ID that cannot be chosen for the computer.
+
+        Returns:
+            String team ID of the chosen computer team.
+
+        Raises:
+            TurnProtocolError: If no eligible teams remain after excluding the user's team.
+        """
         if self._computer_team_chooser is not None:
             return self._computer_team_chooser()
-        teams = get_teams()
-        return random.choice(teams).id
+        excluded_norm = exclude_team_id.strip().upper() if exclude_team_id else None
+        available_teams = [
+            t for t in get_teams()
+            if excluded_norm is None or t.id.upper() != excluded_norm
+        ]
+        if not available_teams:
+            raise TurnProtocolError(
+                "no_available_teams",
+                f"No eligible teams available for the computer after excluding {exclude_team_id!r}.",
+            )
+        return random.choice(available_teams).id
 
     # ---------------------------------------------------------------------------
     # Pre-Match Flow Methods
@@ -239,7 +258,7 @@ class ComputerGameSession:
             self._user_team = self._pre_match.team_a
 
             # Server chooses computer team and assigns to Participant B
-            comp_team_id = self._choose_computer_team()
+            comp_team_id = self._choose_computer_team(exclude_team_id=user_team_id)
             self._pre_match.select_team(Participant.B, comp_team_id)
             self._opponent_team = self._pre_match.team_b
 

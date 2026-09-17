@@ -45,16 +45,15 @@ def test_participant_b_can_select_any_valid_team():
         assert setup.get_team_for_participant(Participant.B) == selected
 
 
-def test_both_participants_can_select_same_team():
-    """Requirements 8 & 27: Both Participant A and B are allowed to select the same team."""
+def test_duplicate_team_selection_is_prohibited():
+    """Cleanup #2: Participant A and B cannot select the same team."""
     setup = PreMatchSetup()
     team_a = setup.select_team(Participant.A, "IND")
-    team_b = setup.select_team(Participant.B, "IND")
-
-    assert team_a == team_b
     assert setup.team_a.id == "IND"
-    assert setup.team_b.id == "IND"
-    assert setup.is_teams_selected is True
+
+    with pytest.raises(PreMatchError) as exc_info:
+        setup.select_team(Participant.B, "IND")
+    assert "has already been selected" in str(exc_info.value)
 
 
 def test_all_four_teams_can_be_selected_successfully():
@@ -324,21 +323,22 @@ def test_create_match_produces_fully_configured_match():
     assert match.innings_1_score == 4
 
 
-def test_create_match_preserves_same_team_names():
-    """When both players select the same team, create_match preserves predefined team names."""
-    setup = PreMatchSetup(
-        team_a="IND",
-        team_b="IND",
-        toss_chooser=lambda: Participant.A,
-    )
-    setup.flip_toss()
-    setup.choose_toss("BAT", by="A")
+def test_pre_match_constructor_rejects_same_teams():
+    """Cleanup #2: PreMatchSetup constructor raises PreMatchError if same team passed."""
+    with pytest.raises(PreMatchError) as exc_info:
+        PreMatchSetup(
+            team_a="IND",
+            team_b="IND",
+            toss_chooser=lambda: Participant.A,
+        )
+    assert "has already been selected" in str(exc_info.value)
 
-    match = setup.create_match()
+
+def test_direct_match_engine_supports_same_team_names_until_cleanup_4():
+    """Verify Match domain engine still handles same team names directly until Cleanup #4."""
+    match = Match(team_1="India", team_2="India")
     assert match.team_1 == "India"
     assert match.team_2 == "India"
-
-    # Verify match starts and functions correctly with both teams having same name
     match.start_match()
     assert match.batting_team == "India"
     assert match.bowling_team == "India"

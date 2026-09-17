@@ -316,6 +316,89 @@ describe('Friend Mode Frontend Tests (Sub-slice 15E)', () => {
         expect(screen.getByText(/Opponent has selected Australia/i)).toBeDefined();
       });
     });
+
+    it('disables opponent chosen team with OPPONENT SELECTED and LOCKED indicator in FriendArena', async () => {
+      render(
+        <FriendArena
+          roomCode="TEAM99"
+          playerToken="tokA"
+          participantSeat="A"
+          onExit={vi.fn()}
+        />
+      );
+
+      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      await act(async () => {
+        currentWs.triggerMessage({
+          type: 'stage_changed',
+          stage: 'TEAM_SELECTION',
+        });
+        currentWs.triggerMessage({
+          type: 'team_selected',
+          participant: 'B',
+          team_id: 'AUS',
+          team_name: 'Australia',
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Opponent has selected Australia/i)).toBeDefined();
+        expect(screen.getByText('OPPONENT SELECTED')).toBeDefined();
+        expect(screen.getByText('LOCKED')).toBeDefined();
+      });
+
+      // Attempt clicking Australia card
+      fireEvent.click(screen.getAllByText('Australia')[0]);
+
+      // Proceed button submits selected team
+      const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+      fireEvent.click(proceedBtn);
+
+      // Verify the sent message selected IND (default valid team), not the disabled AUS team
+      const sentMsgs = currentWs.sentMessages.map((m) => JSON.parse(m));
+      const selectMsg = sentMsgs.find((m) => m.type === 'select_team');
+      expect(selectMsg?.team_id).toBe('IND');
+      expect(selectMsg?.team_id).not.toBe('AUS');
+    });
+
+    it('reconnect sync_state during TEAM_SELECTION restores opponent team as disabled in FriendArena', async () => {
+      render(
+        <FriendArena
+          roomCode="RECON1"
+          playerToken="tokB"
+          participantSeat="B"
+          onExit={vi.fn()}
+        />
+      );
+
+      const currentWs = MockWebSocket.instances[MockWebSocket.instances.length - 1];
+      await act(async () => {
+        currentWs.triggerMessage({
+          type: 'sync_state',
+          participant: 'B',
+          stage: 'TEAM_SELECTION',
+          opponent_team: { id: 'IND', name: 'India' },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Opponent has selected India/i)).toBeDefined();
+        expect(screen.getByText('OPPONENT SELECTED')).toBeDefined();
+        expect(screen.getByText('LOCKED')).toBeDefined();
+      });
+
+      // India card is locked, default auto-switched to another team (e.g. Australia)
+      // Attempting to click India does not select it
+      fireEvent.click(screen.getAllByText('India')[0]);
+
+      const proceedBtn = screen.getByText(/PROCEED TO TOSS/i);
+      fireEvent.click(proceedBtn);
+
+      const sentMsgs = currentWs.sentMessages.map((m) => JSON.parse(m));
+      const selectMsg = sentMsgs.find((m) => m.type === 'select_team');
+      expect(selectMsg?.team_id).toBe('AUS');
+      expect(selectMsg?.team_id).not.toBe('IND');
+    });
   });
 
   // 5. TOSS EXPERIENCE (PLAYER RELATIVE)

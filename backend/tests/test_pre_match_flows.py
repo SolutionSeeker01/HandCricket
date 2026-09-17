@@ -60,10 +60,11 @@ def test_initial_state_is_team_selection():
 def test_user_selects_each_valid_predefined_team():
     """User can select IND, AUS, ENG, or SA and receives opponent team and toss result."""
     for team_id in ["IND", "AUS", "ENG", "SA"]:
+        comp_team = "ENG" if team_id == "AUS" else "AUS"
         session = ComputerGameSession(
             skip_pre_match=False,
             toss_chooser=lambda: "A",
-            computer_team_chooser=lambda: "AUS",
+            computer_team_chooser=lambda ct=comp_team: ct,
         )
         reset_standalone_computer_session(session)
 
@@ -75,7 +76,8 @@ def test_user_selects_each_valid_predefined_team():
             next_msg = ws.receive_json()
             assert next_msg["type"] == TYPE_PRE_MATCH_STATE
             assert next_msg["user_team"]["id"] == team_id
-            assert next_msg["opponent_team"]["id"] == "AUS"
+            assert next_msg["opponent_team"]["id"] == comp_team
+            assert next_msg["opponent_team"]["id"] != team_id
             assert next_msg["toss_winner"] == "user"
             assert next_msg["stage"] == "TOSS_DECISION"
 
@@ -93,21 +95,52 @@ def test_invalid_team_selection_rejected():
         assert err["code"] == "invalid_team_id"
 
 
-def test_same_team_selection_allowed():
-    """User and computer can both play with the same team (e.g., IND vs IND)."""
+def test_computer_never_selects_same_team_as_user():
+    """Cleanup #2: Computer must never select the same team chosen by the user.
+
+    Tests all 4 predefined user team choices (IND, AUS, ENG, SA) and verifies
+    that repeated random selection always yields distinct teams.
+    """
+    for user_team in ["IND", "AUS", "ENG", "SA"]:
+        for _ in range(10):  # repeated runs to verify random distribution
+            session = ComputerGameSession(
+                skip_pre_match=False,
+                toss_chooser=lambda: "A",
+            )
+            reset_standalone_computer_session(session)
+
+            with client.websocket_connect("/ws?mode=computer&skip_pre_match=false") as ws:
+                ws.receive_json()
+                ws.send_json({"type": TYPE_SELECT_TEAM, "team_id": user_team})
+                state = ws.receive_json()
+                assert state["user_team"]["id"] == user_team
+                assert state["opponent_team"]["id"] != user_team
+                assert state["opponent_team"]["id"] in {"IND", "AUS", "ENG", "SA"}
+
+
+def test_computer_mode_restart_preserves_team_uniqueness():
+    """Cleanup #2: Resetting the pre-match session and selecting again maintains team uniqueness."""
     session = ComputerGameSession(
         skip_pre_match=False,
         toss_chooser=lambda: "A",
-        computer_team_chooser=lambda: "IND",
     )
     reset_standalone_computer_session(session)
 
     with client.websocket_connect("/ws?mode=computer&skip_pre_match=false") as ws:
         ws.receive_json()
         ws.send_json({"type": TYPE_SELECT_TEAM, "team_id": "IND"})
-        state = ws.receive_json()
-        assert state["user_team"]["id"] == "IND"
-        assert state["opponent_team"]["id"] == "IND"
+        state1 = ws.receive_json()
+        assert state1["opponent_team"]["id"] != "IND"
+
+        # Reset pre-match
+        ws.send_json({"type": TYPE_RESET_PRE_MATCH})
+        reset_state = ws.receive_json()
+        assert reset_state["stage"] == "TEAM_SELECTION"
+
+        # Select again
+        ws.send_json({"type": TYPE_SELECT_TEAM, "team_id": "AUS"})
+        state2 = ws.receive_json()
+        assert state2["opponent_team"]["id"] != "AUS"
 
 
 def test_user_wins_toss_and_chooses_bat():
