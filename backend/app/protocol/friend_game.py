@@ -1260,12 +1260,10 @@ class FriendGameSession:
 
         score = active_innings.total_runs if active_innings else 0
         wickets = active_innings.wickets if active_innings else 0
-        balls_in_over = (
-            active_innings.balls_in_current_over if active_innings else 0
-        )
-        completed_overs = (
-            active_innings.current_over - 1 if active_innings else 0
-        )
+        total_balls = active_innings.total_balls if active_innings else 0
+        bpo = active_innings.balls_per_over if active_innings else 6
+        completed_overs = total_balls // bpo
+        balls_in_over = total_balls % bpo
         overs_str = f"{completed_overs}.{balls_in_over}"
 
         striker_info: Dict[str, Any] = {"name": "", "runs": 0, "balls": 0}

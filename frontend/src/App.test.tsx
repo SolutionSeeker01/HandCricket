@@ -96,6 +96,20 @@ describe('Slice 12 Frontend Component Tests', () => {
     expect(screen.getAllByText('4 (5)').length).toBeGreaterThan(0);
   });
 
+  it('Scoreboard displays (5.0 ov) badge and all six balls at completion of 5th over', () => {
+    const state5Overs: MatchState = {
+      ...mockMatchState,
+      overs: '5.0',
+      max_overs: 5,
+      current_over_balls: [1, 2, 4, 6, 0, 'W'],
+    };
+    render(<Scoreboard matchState={state5Overs} />);
+    expect(screen.getAllByText('(5.0 ov)').length).toBeGreaterThan(0);
+    expect(screen.queryByText('(4.0 ov)')).toBeNull();
+    expect(screen.getAllByText('W').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('6').length).toBeGreaterThan(0);
+  });
+
   it('PitchArena renders 1-6 buttons and triggers onSelectNumber when clicked', () => {
     const handleSelect = vi.fn();
     render(

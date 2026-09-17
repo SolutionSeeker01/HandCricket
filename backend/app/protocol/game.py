@@ -487,10 +487,10 @@ class ComputerGameSession:
         # Current score & wickets
         score = active_innings.total_runs if active_innings else 0
         wickets = active_innings.wickets if active_innings else 0
-        balls_in_over = active_innings.balls_in_current_over if active_innings else 0
-        completed_overs = (
-            active_innings.current_over - 1 if active_innings else 0
-        )
+        total_balls = active_innings.total_balls if active_innings else 0
+        bpo = active_innings.balls_per_over if active_innings else 6
+        completed_overs = total_balls // bpo
+        balls_in_over = total_balls % bpo
         overs_str = f"{completed_overs}.{balls_in_over}"
 
         # Batters (Striker and Non-Striker)
@@ -834,7 +834,8 @@ class ComputerGameSession:
 
         # Check over completion
         if active_innings and active_innings.over_complete:
-            self._current_over_balls = []
+            if not active_innings.is_completed and not self._match.is_completed:
+                self._current_over_balls = []
             # Rotate bowler if innings is not complete
             if not active_innings.is_completed:
                 active_bowling = (

@@ -446,3 +446,62 @@ def test_computer_mode_timeout_fallback_resolves_ball():
     asyncio.run(_run())
 
 
+def test_computer_mode_over_progression_monotonic_to_5_0():
+    """Verify Computer Mode over progression:
+    - Normal over progression across overs
+    - 4.4 -> 4.5
+    - Final ball produces 5.0 (never 4.0)
+    - All 6 ball indicators remain present in current_over_balls upon innings completion.
+    """
+    async def _run():
+        session = ComputerGameSession(max_overs=5, skip_pre_match=True)
+        session._init_match()
+        await session._start_turn_locked()
+
+        sent_msgs = []
+        class MockWs:
+            async def send_json(self, msg):
+                sent_msgs.append(msg)
+        session._websocket = MockWs()
+
+        # Ball 1 to 24 (Overs 1 to 4)
+        for ball_idx in range(1, 25):
+            sent_msgs.clear()
+            await session.submit_number(1)
+            ball_msg = next(m for m in sent_msgs if m.get("type") == "ball_result")
+            ms = ball_msg["match_state"]
+            expected_overs = f"{ball_idx // 6}.{ball_idx % 6}"
+            assert ms["overs"] == expected_overs
+
+        # Over 4 complete: overs is "4.0", current_over_balls was reset for over 5
+        # Balls 25 to 29 (Over 5, balls 1 to 5)
+        for ball_in_o5 in range(1, 6):
+            sent_msgs.clear()
+            await session.submit_number(1)
+            ball_msg = next(m for m in sent_msgs if m.get("type") == "ball_result")
+            ms = ball_msg["match_state"]
+            assert ms["overs"] == f"4.{ball_in_o5}"
+            assert len(ms["current_over_balls"]) == ball_in_o5
+
+        # Ball 29 was "4.5" with 5 balls
+        assert ms["overs"] == "4.5"
+        assert len(ms["current_over_balls"]) == 5
+
+        # Ball 30 (final ball of 5th over)
+        sent_msgs.clear()
+        await session.submit_number(1)
+        ball_msg = next(m for m in sent_msgs if m.get("type") == "ball_result")
+        final_ms = ball_msg["match_state"]
+
+        # MUST be 5.0, NEVER 4.0
+        assert final_ms["overs"] == "5.0"
+        assert final_ms["overs"] != "4.0"
+        assert final_ms["status"] == "INNINGS_BREAK"
+
+        # Final 6 ball indicators MUST remain present (not cleared to empty list)
+        assert len(final_ms["current_over_balls"]) == 6
+
+    asyncio.run(_run())
+
+
+

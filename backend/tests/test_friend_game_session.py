@@ -257,3 +257,61 @@ def test_friend_game_ping_and_query_mode(client: TestClient):
         ws.send_text("ping")
         resp = ws.receive_text()
         assert resp == "pong"
+
+
+@pytest.mark.anyio
+async def test_friend_mode_over_progression_monotonic_to_5_0(manager: RoomManager):
+    """Verify Friend Mode over progression:
+    - Normal over progression across overs
+    - 4.4 -> 4.5
+    - Final ball produces 5.0 (never 4.0)
+    - All 6 ball indicators remain present upon innings completion.
+    """
+    from backend.app.protocol.room import FriendGameRoom, PlayerSlot, RoomStage
+
+    room = FriendGameRoom(room_code="TEST01", token_a="tokA")
+    room.slot_b = PlayerSlot(participant=Participant.B, token="tokB")
+    room.stage = RoomStage.TEAM_SELECTION
+    session = FriendGameSession(room=room, max_overs=5)
+
+    sent_a = []
+    class MockWs:
+        async def send_json(self, msg):
+            sent_a.append(msg)
+    session._sockets[Participant.A] = MockWs()
+    session._sockets[Participant.B] = MockWs()
+
+    await session.select_team(Participant.A, "IND")
+    await session.select_team(Participant.B, "AUS")
+    session._pre_match._toss._winner = Participant.A
+    await session.choose_toss(Participant.A, "BAT")
+    await session.select_bowler(Participant.B, 11)
+
+    for ball in range(1, 31):
+        tid = session._current_turn.turn_id
+        sent_a.clear()
+        await session.submit_number(Participant.A, 1, tid)
+        await session.submit_number(Participant.B, 6, tid)
+
+        # Grab ball_result message
+        ball_msg = next(m for m in sent_a if m.get("type") == "ball_result")
+        ms = ball_msg["match_state"]
+
+        if ball < 30:
+            expected_overs = f"{ball // 6}.{ball % 6}"
+            assert ms["overs"] == expected_overs
+        else:
+            # Ball 30 (final ball of 5th over)
+            assert ms["overs"] == "5.0"
+            assert ms["overs"] != "4.0"
+            assert ms["status"] == "INNINGS_BREAK"
+            assert len(ms["current_over_balls"]) == 6
+
+        if session.room.stage == RoomStage.BOWLER_SELECTION:
+            for m in sent_a:
+                if m.get("type") == "bowler_selection_required":
+                    selector = Participant(m["bowler_selector"])
+                    next_b = m["eligible_bowlers"][0]["id"]
+                    await session.select_bowler(selector, next_b)
+                    break
+
