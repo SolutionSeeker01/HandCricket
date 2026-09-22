@@ -48,7 +48,10 @@ def reset_standalone_turn_session(
 
 
 def create_computer_session(
-    user_team: str = "IND", opponent_team: str = "AUS", skip_pre_match: bool = False
+    user_team: str = "IND",
+    opponent_team: str = "AUS",
+    skip_pre_match: bool = False,
+    difficulty: str = "easy",
 ) -> ComputerGameSession:
     """Create an isolated ComputerGameSession per connection, or return explicit test session if injected."""
     global _injected_computer_session
@@ -58,11 +61,15 @@ def create_computer_session(
         user_team_id=user_team,
         opponent_team_id=opponent_team,
         skip_pre_match=skip_pre_match,
+        difficulty=difficulty,
     )
 
 
 def get_standalone_computer_session(
-    user_team: str = "IND", opponent_team: str = "AUS", skip_pre_match: bool = False
+    user_team: str = "IND",
+    opponent_team: str = "AUS",
+    skip_pre_match: bool = False,
+    difficulty: str = "easy",
 ) -> ComputerGameSession:
     """Retrieve or initialize the active ComputerGameSession."""
     global _standalone_computer_session, _injected_computer_session
@@ -76,6 +83,7 @@ def get_standalone_computer_session(
             user_team_id=user_team,
             opponent_team_id=opponent_team,
             skip_pre_match=skip_pre_match,
+            difficulty=difficulty,
         )
     return _standalone_computer_session
 

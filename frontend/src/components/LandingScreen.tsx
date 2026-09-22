@@ -1,15 +1,28 @@
 import React, { useState } from 'react';
+import { ComputerDifficulty } from '../types';
 
 interface LandingScreenProps {
-  onPlayVsComputer: () => void;
+  onPlayVsComputer: (difficulty?: ComputerDifficulty) => void;
   onPlayWithFriend?: () => void;
+  difficulty?: ComputerDifficulty;
+  onSelectDifficulty?: (difficulty: ComputerDifficulty) => void;
 }
 
 export const LandingScreen: React.FC<LandingScreenProps> = ({
   onPlayVsComputer,
   onPlayWithFriend,
+  difficulty: controlledDifficulty,
+  onSelectDifficulty,
 }) => {
   const [showRules, setShowRules] = useState(false);
+  const [localDifficulty, setLocalDifficulty] = useState<ComputerDifficulty>('easy');
+
+  const currentDifficulty = controlledDifficulty ?? localDifficulty;
+
+  const handleDifficultyChange = (diff: ComputerDifficulty) => {
+    setLocalDifficulty(diff);
+    onSelectDifficulty?.(diff);
+  };
 
   return (
     <div className="relative min-h-screen w-full flex flex-col items-center justify-between p-4 sm:p-6 overflow-x-hidden select-none bg-[url('/stadium_bg.jpg')] bg-cover bg-center text-white">
@@ -35,10 +48,14 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
       <main className="relative z-10 w-full max-w-3xl my-auto py-8 grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
         {/* Play vs Computer (ACTIVE) */}
         <div
-          onClick={onPlayVsComputer}
+          onClick={() => onPlayVsComputer(currentDifficulty)}
           role="button"
           tabIndex={0}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onPlayVsComputer(); }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              onPlayVsComputer(currentDifficulty);
+            }
+          }}
           className="group relative flex flex-col justify-between p-6 sm:p-7 rounded-2xl bg-gradient-to-b from-blue-900/60 to-slate-900/80 border-2 border-amber-400/60 hover:border-amber-400 shadow-[0_0_25px_rgba(245,158,11,0.2)] hover:shadow-[0_0_35px_rgba(245,158,11,0.4)] transition-all duration-200 cursor-pointer transform hover:-translate-y-1 active:scale-[0.98] backdrop-blur-md"
         >
           <div className="absolute top-4 right-4 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-[10px] font-black tracking-wider text-emerald-300 uppercase">
@@ -55,15 +72,73 @@ export const LandingScreen: React.FC<LandingScreenProps> = ({
             <p className="text-slate-300 text-sm mt-2 leading-relaxed">
               Select your nation (IND, AUS, ENG, SA), flip the coin, set your field, and outthink the smart AI bowler!
             </p>
+
+            {/* 3-Way Difficulty Selector */}
+            <div
+              className="mt-4 pt-3 border-t border-white/10"
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => e.stopPropagation()}
+            >
+              <div className="text-[11px] font-bold uppercase tracking-wider text-amber-300/90 mb-2 flex items-center justify-between">
+                <span>Bot Difficulty</span>
+                <span className="text-[10px] text-slate-300 font-medium">
+                  {currentDifficulty === 'easy' && 'Relaxed & Random'}
+                  {currentDifficulty === 'medium' && 'Smart & Adaptive'}
+                  {currentDifficulty === 'hard' && 'Expert & Ruthless'}
+                </span>
+              </div>
+              <div
+                role="radiogroup"
+                aria-label="Bot Difficulty"
+                className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-slate-950/60 border border-white/10"
+              >
+                {(
+                  [
+                    { id: 'easy', label: 'Easy', desc: 'Relaxed & Random' },
+                    { id: 'medium', label: 'Medium', desc: 'Smart & Adaptive' },
+                    { id: 'hard', label: 'Hard', desc: 'Expert & Ruthless' },
+                  ] as const
+                ).map((d) => {
+                  const isSelected = currentDifficulty === d.id;
+                  return (
+                    <button
+                      key={d.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDifficultyChange(d.id);
+                      }}
+                      className={`flex flex-col items-center justify-center py-2 px-1.5 rounded-lg text-center transition-all duration-150 cursor-pointer ${
+                        isSelected
+                          ? 'bg-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/20 scale-[1.02]'
+                          : 'text-slate-300 hover:text-white hover:bg-white/10 font-bold'
+                      }`}
+                    >
+                      <span className="text-xs sm:text-sm leading-none">{d.label}</span>
+                      <span
+                        className={`text-[9px] mt-1 leading-tight line-clamp-1 hidden sm:block ${
+                          isSelected ? 'text-slate-900 font-semibold' : 'text-slate-400'
+                        }`}
+                      >
+                        {d.desc}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
-          <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-between">
+          <div className="mt-5 pt-3 border-t border-white/10 flex items-center justify-between">
             <span className="text-xs font-bold text-amber-300 tracking-wide uppercase">Solo Mode • 5 Overs</span>
             <span className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-slate-950 font-black text-sm tracking-wide shadow-md group-hover:brightness-110">
               PLAY NOW <span className="text-base font-black">→</span>
             </span>
           </div>
         </div>
+
 
         {/* Play with Friend (Active when callback provided, otherwise Coming Soon) */}
         <div

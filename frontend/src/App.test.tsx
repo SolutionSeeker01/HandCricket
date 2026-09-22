@@ -2277,4 +2277,132 @@ describe('Cleanup #3: User-Facing String Hygiene & Internal Reference Removal', 
   });
 });
 
+describe('Phase 6: Computer Difficulty Selection UI & WebSocket Propagation', () => {
+  let createdSockets: any[] = [];
+  let socketUrls: string[] = [];
+
+  beforeEach(() => {
+    createdSockets = [];
+    socketUrls = [];
+    const mockWsClass: any = vi.fn().mockImplementation((url: string) => {
+      socketUrls.push(url);
+      const mockSock = {
+        url,
+        readyState: 1, // OPEN
+        send: vi.fn(),
+        close: vi.fn(),
+        onopen: null,
+        onmessage: null,
+        onerror: null,
+        onclose: null,
+      };
+      createdSockets.push(mockSock);
+      return mockSock;
+    });
+    mockWsClass.OPEN = 1;
+    mockWsClass.CONNECTING = 0;
+    mockWsClass.CLOSING = 2;
+    mockWsClass.CLOSED = 3;
+    vi.stubGlobal('WebSocket', mockWsClass);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('LandingScreen renders 3-way difficulty selector with Easy selected by default', () => {
+    const handlePlay = vi.fn();
+    render(<LandingScreen onPlayVsComputer={handlePlay} />);
+
+    // Verify 3 options render
+    expect(screen.getByRole('radio', { name: /Easy/i })).toBeDefined();
+    expect(screen.getByRole('radio', { name: /Medium/i })).toBeDefined();
+    expect(screen.getByRole('radio', { name: /Hard/i })).toBeDefined();
+
+    // Verify Easy is aria-checked=true by default
+    const easyRadio = screen.getByRole('radio', { name: /Easy/i });
+    expect(easyRadio.getAttribute('aria-checked')).toBe('true');
+
+    // Default label description
+    expect(screen.getAllByText('Relaxed & Random').length).toBeGreaterThan(0);
+
+    // Clicking Play Now without selecting invokes onPlayVsComputer('easy')
+    const playBtn = screen.getByText('PLAY NOW');
+    fireEvent.click(playBtn);
+    expect(handlePlay).toHaveBeenCalledWith('easy');
+  });
+
+  it('Easy, Medium, and Hard can each be selected and clicking button stops propagation', () => {
+    const handlePlay = vi.fn();
+    const handleSelect = vi.fn();
+    render(<LandingScreen onPlayVsComputer={handlePlay} onSelectDifficulty={handleSelect} />);
+
+    const mediumRadio = screen.getByRole('radio', { name: /Medium/i });
+    fireEvent.click(mediumRadio);
+
+    // Clicking difficulty button alone does NOT start game immediately
+    expect(handlePlay).not.toHaveBeenCalled();
+    expect(handleSelect).toHaveBeenCalledWith('medium');
+    expect(mediumRadio.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getAllByText('Smart & Adaptive').length).toBeGreaterThan(0);
+
+    const hardRadio = screen.getByRole('radio', { name: /Hard/i });
+    fireEvent.click(hardRadio);
+
+    expect(handlePlay).not.toHaveBeenCalled();
+    expect(handleSelect).toHaveBeenCalledWith('hard');
+    expect(hardRadio.getAttribute('aria-checked')).toBe('true');
+    expect(screen.getAllByText('Expert & Ruthless').length).toBeGreaterThan(0);
+
+    // Now clicking Play Now launches with 'hard'
+    fireEvent.click(screen.getByText('PLAY NOW'));
+    expect(handlePlay).toHaveBeenCalledWith('hard');
+  });
+
+  it('useCricketGame initializes WebSocket connection containing difficulty=easy by default', () => {
+    renderHook(() => useCricketGame());
+
+    expect(socketUrls.length).toBeGreaterThan(0);
+    const initialUrl = socketUrls[0];
+    expect(initialUrl).toContain('/ws?mode=computer&difficulty=easy');
+  });
+
+  it('useCricketGame startVsComputer with medium or hard connects to WebSocket with corresponding difficulty', () => {
+    const { result } = renderHook(() => useCricketGame());
+
+    // Initially connected with easy
+    expect(result.current.difficulty).toBe('easy');
+    expect(socketUrls[socketUrls.length - 1]).toContain('difficulty=easy');
+
+    // Start vs Computer with medium
+    act(() => {
+      result.current.startVsComputer('medium');
+    });
+
+    expect(result.current.difficulty).toBe('medium');
+    const mediumUrl = socketUrls[socketUrls.length - 1];
+    expect(mediumUrl).toContain('/ws?mode=computer&difficulty=medium');
+
+    // Start vs Computer with hard
+    act(() => {
+      result.current.startVsComputer('hard');
+    });
+
+    expect(result.current.difficulty).toBe('hard');
+    const hardUrl = socketUrls[socketUrls.length - 1];
+    expect(hardUrl).toContain('/ws?mode=computer&difficulty=hard');
+  });
+
+  it('Friend Mode does not receive or use computer difficulty parameter', () => {
+    render(<LandingScreen onPlayVsComputer={vi.fn()} onPlayWithFriend={vi.fn()} />);
+
+    // Play with Friend button is present
+    expect(screen.getByText('Play with Friend')).toBeDefined();
+    // Computer difficulty selector is inside Play vs Computer card, not friend card
+    const difficultyGroup = screen.getByRole('radiogroup', { name: 'Bot Difficulty' });
+    expect(difficultyGroup).toBeDefined();
+  });
+});
+
 

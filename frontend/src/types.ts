@@ -93,6 +93,8 @@ export interface TurnCountdown {
   isUrgent: boolean;
 }
 
+export type ComputerDifficulty = 'easy' | 'medium' | 'hard';
+
 export type ConnectionStatus =
   | 'connecting'
   | 'connected'

@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
-from backend.app.engine.computer import ComputerPlayer
+from backend.app.engine.computer import ComputerPlayer, Difficulty, MatchContext
 from backend.app.main import app
 from backend.app.protocol.game import ComputerGameSession
 from backend.app.protocol.messages import TurnProtocolError
@@ -454,7 +454,8 @@ def test_computer_mode_over_progression_monotonic_to_5_0():
     - All 6 ball indicators remain present in current_over_balls upon innings completion.
     """
     async def _run():
-        session = ComputerGameSession(max_overs=5, skip_pre_match=True)
+        bot = ComputerPlayer(chooser=lambda: 2)
+        session = ComputerGameSession(max_overs=5, skip_pre_match=True, computer_bot=bot)
         session._init_match()
         await session._start_turn_locked()
 
@@ -532,6 +533,170 @@ def test_computer_mode_submitting_number_5_rejected():
         assert err["type"] == "error"
         assert err["code"] == "invalid_number"
         assert "choice must be one of" in err["message"]
+
+
+# ===========================================================================
+# Difficulty Integration & Zero-Cheat Ordering (Phase 4)
+# ===========================================================================
+
+
+def test_session_difficulty_propagation():
+    """ComputerGameSession accepts difficulty (str or enum) and defaults to EASY."""
+    session_default = ComputerGameSession()
+    assert session_default.difficulty == Difficulty.EASY
+
+    session_easy = ComputerGameSession(difficulty="easy")
+    assert session_easy.difficulty == Difficulty.EASY
+
+    session_med = ComputerGameSession(difficulty=Difficulty.MEDIUM)
+    assert session_med.difficulty == Difficulty.MEDIUM
+
+    session_hard = ComputerGameSession(difficulty="hard")
+    assert session_hard.difficulty == Difficulty.HARD
+
+
+def test_session_rejects_invalid_difficulty():
+    """ComputerGameSession raises TurnProtocolError on invalid difficulty string."""
+    with pytest.raises(TurnProtocolError) as exc:
+        ComputerGameSession(difficulty="god_mode")
+    assert exc.value.code == "invalid_difficulty"
+
+
+def test_zero_cheat_ordering_and_context_correctness():
+    """Verify that choose_number() receives MatchContext and the current user choice
+    is NOT yet in history at the moment the decision is made.
+    """
+    history_at_choice_time = []
+    received_contexts = []
+
+    class SpyComputerPlayer(ComputerPlayer):
+        def choose_number(self, context=None):
+            # Capture state at the EXACT instant computer chooses its number
+            history_at_choice_time.append(list(self._opponent_batting_history))
+            received_contexts.append(context)
+            return 2  # Deterministic response
+
+    spy_bot = SpyComputerPlayer(difficulty=Difficulty.HARD)
+    session = ComputerGameSession(computer_bot=spy_bot)
+    reset_standalone_computer_session(session)
+
+    with client.websocket_connect("/ws?mode=computer") as ws:
+        ws.receive_json()  # turn_started
+
+        # Human submits 4 for ball 1
+        ws.send_json({"type": "submit_number", "number": 4})
+        ack = ws.receive_json()
+        assert ack["type"] == "number_submitted"
+        res = ws.receive_json()
+        assert res["type"] == "ball_result"
+
+        # 1. At the moment choose_number() ran, history MUST be empty! (Choice 4 was NOT yet recorded)
+        assert len(history_at_choice_time) == 1
+        assert history_at_choice_time[0] == []
+        assert 4 not in history_at_choice_time[0]
+
+        # 2. MatchContext was properly constructed from match state
+        ctx1 = received_contexts[0]
+        assert ctx1 is not None
+        assert ctx1.role == "bowl"  # Human is batting, computer is bowling
+        assert ctx1.innings == 1
+        assert ctx1.target is None
+        assert ctx1.balls_remaining == 30  # Initial max balls
+
+        # 3. AFTER the ball has resolved, the bot's history now contains 4!
+        assert spy_bot._opponent_batting_history == [4]
+
+        # Now submit ball 2 with human choice 6
+        turn2 = ws.receive_json()
+        assert turn2["type"] == "turn_started"
+
+        ws.send_json({"type": "submit_number", "number": 6})
+        ws.receive_json()  # ack
+        ws.receive_json()  # ball_result
+
+        # At the moment choose_number() ran for ball 2, history contained [4], NOT 6!
+        assert len(history_at_choice_time) == 2
+        assert history_at_choice_time[1] == [4]
+        assert 6 not in history_at_choice_time[1]
+
+        # Context on ball 2: balls remaining is now 29
+        ctx2 = received_contexts[1]
+        assert ctx2.balls_remaining == 29
+
+        # AFTER ball 2, history contains [4, 6]
+        assert spy_bot._opponent_batting_history == [4, 6]
+
+
+def test_session_role_and_context_in_innings_2():
+    """In Innings 2, when computer is batting, role is 'bat' and target/runs_needed are populated."""
+    received_contexts = []
+
+    class SpyComputerPlayer(ComputerPlayer):
+        def choose_number(self, context=None):
+            received_contexts.append(context)
+            return 1
+
+    spy_bot = SpyComputerPlayer(difficulty=Difficulty.MEDIUM)
+    session = ComputerGameSession(
+        computer_bot=spy_bot,
+        max_overs=1,
+        balls_per_over=2,  # 2 balls per innings for quick transition
+    )
+    reset_standalone_computer_session(session)
+
+    with client.websocket_connect("/ws?mode=computer") as ws:
+        ws.receive_json()  # turn_started
+
+        # Ball 1 of Innings 1 (human batting 4, bot bowling 1 -> 4 runs)
+        ws.send_json({"type": "submit_number", "number": 4})
+        ws.receive_json()  # ack
+        ws.receive_json()  # ball_result
+        ws.receive_json()  # turn_started
+
+        # Ball 2 of Innings 1 (human batting 6, bot bowling 1 -> 6 runs)
+        # Total Innings 1 score = 10. Target = 11.
+        ws.send_json({"type": "submit_number", "number": 6})
+        ws.receive_json()  # ack
+        res2 = ws.receive_json()  # ball_result
+        assert res2["match_state"]["status"] == "INNINGS_BREAK"
+        assert res2["match_state"]["target"] == 11
+
+        # Start innings 2
+        ws.send_json({"type": "start_innings_2"})
+        turn_inn2 = ws.receive_json()
+        assert turn_inn2["type"] == "turn_started"
+
+        # Ball 1 of Innings 2: Human is BOWLING, computer is BATTING
+        # Human bowls 3
+        ws.send_json({"type": "submit_number", "number": 3})
+        ws.receive_json()  # ack
+        ws.receive_json()  # ball_result
+
+        # Verify context in Innings 2
+        assert len(received_contexts) == 3
+        ctx_inn2 = received_contexts[2]
+        assert ctx_inn2.role == "bat"  # Computer is batting!
+        assert ctx_inn2.innings == 2
+        assert ctx_inn2.target == 11
+        assert ctx_inn2.runs_needed == 11
+        assert ctx_inn2.balls_remaining == 2
+
+        # Human bowling choice (3) was recorded into _opponent_bowling_history
+        assert spy_bot._opponent_bowling_history == [3]
+        # Human batting history remained untouched from Innings 1 ([4, 6])
+        assert spy_bot._opponent_batting_history == [4, 6]
+
+
+def test_session_rematch_resets_bot_history():
+    """Resetting the match clears the bot's opponent history."""
+    bot = ComputerPlayer(difficulty=Difficulty.HARD)
+    bot.record_opponent_choice(4, role="bat")
+    bot.record_opponent_choice(6, role="bowl")
+
+    session = ComputerGameSession(computer_bot=bot)
+    assert len(bot._opponent_batting_history) == 0
+    assert len(bot._opponent_bowling_history) == 0
+
 
 
 

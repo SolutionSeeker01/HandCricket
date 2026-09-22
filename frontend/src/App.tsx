@@ -17,6 +17,8 @@ import { useCricketGame } from './hooks/useCricketGame';
 export default function App() {
   const {
     appStage,
+    difficulty,
+    setDifficulty,
     preMatchState,
     tossActive,
     tossOutcome,
@@ -118,6 +120,8 @@ export default function App() {
         <LandingScreen
           onPlayVsComputer={startVsComputer}
           onPlayWithFriend={() => setShowFriendLobby(true)}
+          difficulty={difficulty}
+          onSelectDifficulty={setDifficulty}
         />
         <FriendLobbyModal
           isOpen={showFriendLobby}

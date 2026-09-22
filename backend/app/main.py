@@ -168,13 +168,30 @@ async def websocket_endpoint(
     skip_pre_match: Optional[bool] = Query(False),
     room: Optional[str] = Query(None),
     token: Optional[str] = Query(None),
+    difficulty: Optional[str] = Query(None),
 ) -> None:
     """WebSocket endpoint supporting Computer Mode, Friend Mode, protocol turns, and smoke testing."""
     if mode == "computer":
+        selected_difficulty = "easy"
+        if difficulty is not None and difficulty.strip():
+            norm_difficulty = difficulty.strip().lower()
+            if norm_difficulty not in ("easy", "medium", "hard"):
+                await websocket.accept()
+                await websocket.send_json(
+                    serialize_error(
+                        "invalid_difficulty",
+                        f"Invalid difficulty: {difficulty!r}. Must be one of ['easy', 'medium', 'hard'].",
+                    )
+                )
+                await websocket.close(code=4000)
+                return
+            selected_difficulty = norm_difficulty
+
         session = create_computer_session(
             user_team=user_team or "IND",
             opponent_team=opponent_team or "AUS",
             skip_pre_match=bool(skip_pre_match),
+            difficulty=selected_difficulty,
         )
         await handle_computer_game_websocket(websocket, session)
         return

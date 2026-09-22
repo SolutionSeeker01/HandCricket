@@ -152,7 +152,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             }}
             className="w-full py-2.5 px-4 rounded-xl font-bold text-sm text-red-300 bg-red-950/40 hover:bg-red-900/50 border border-red-800/50 active:scale-98 transition-all"
           >
-            Restart Current Match
+            Exit Match
           </button>
           <button
             onClick={onClose}

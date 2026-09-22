@@ -7,12 +7,17 @@ predefined Teams, PreMatchSetup, Toss, and protocol messaging.
 
 import asyncio
 import random
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from fastapi import WebSocket
 
 from backend.app.engine.ball import BallResult, resolve_ball, validate_choice
-from backend.app.engine.computer import ComputerPlayer
+from backend.app.engine.computer import (
+    ComputerPlayer,
+    Difficulty,
+    MatchContext,
+    default_number_chooser,
+)
 from backend.app.engine.match import Match, MatchStatus
 from backend.app.engine.pre_match import PreMatchSetup
 from backend.app.engine.teams import Team, get_team, get_teams, is_valid_team_id
@@ -63,6 +68,7 @@ class ComputerGameSession:
         computer_team_chooser: Optional[Callable[[], str]] = None,
         computer_decision_chooser: Optional[Callable[[], TossDecision]] = None,
         computer_bowler_chooser: Optional[Callable[[List[int]], int]] = None,
+        difficulty: Union[Difficulty, str] = Difficulty.EASY,
     ) -> None:
         if skip_pre_match and user_team_id.strip().upper() == opponent_team_id.strip().upper():
             raise TurnProtocolError(
@@ -74,7 +80,25 @@ class ComputerGameSession:
         self._timeout_seconds: float = timeout_seconds
         self._max_overs: int = max_overs
         self._balls_per_over: int = balls_per_over
-        self._bot: ComputerPlayer = computer_bot if computer_bot is not None else ComputerPlayer()
+
+        if isinstance(difficulty, str):
+            try:
+                self._difficulty: Difficulty = Difficulty(difficulty.lower())
+            except ValueError:
+                raise TurnProtocolError(
+                    "invalid_difficulty",
+                    f"Invalid difficulty {difficulty!r}. Must be one of {[d.value for d in Difficulty]}.",
+                )
+        elif isinstance(difficulty, Difficulty):
+            self._difficulty = difficulty
+        else:
+            raise TypeError(
+                f"Expected Difficulty enum or str, got {type(difficulty).__name__}."
+            )
+
+        self._bot: ComputerPlayer = (
+            computer_bot if computer_bot is not None else ComputerPlayer(difficulty=self._difficulty)
+        )
         self._auto_start: bool = auto_start
         self._skip_pre_match: bool = skip_pre_match
 
@@ -97,8 +121,15 @@ class ComputerGameSession:
         else:
             self._init_pre_match()
 
+    @property
+    def difficulty(self) -> Difficulty:
+        """The active difficulty level of the computer session."""
+        return self._bot.difficulty if hasattr(self._bot, "difficulty") else self._difficulty
+
     def _init_pre_match(self) -> None:
         """Initialize or reset pre-match coordination state."""
+        if hasattr(self._bot, "reset_history"):
+            self._bot.reset_history()
         self._pre_match = PreMatchSetup(toss_chooser=self._toss_chooser)
         self._stage = "TEAM_SELECTION"
         self._awaiting_bowler_selection = False
@@ -117,6 +148,8 @@ class ComputerGameSession:
 
     def _init_match(self) -> None:
         """Initialize or reset match engine and state tracking for direct play."""
+        if hasattr(self._bot, "reset_history"):
+            self._bot.reset_history()
         self._stage = "IN_MATCH"
         self._awaiting_bowler_selection = False
         self._user_is_batting_first = True
@@ -727,7 +760,7 @@ class ComputerGameSession:
                 ):
                     self._turn_submitted = True
                     # User timed out: generate random fallback choice for user
-                    fallback_choice = self._bot.choose_number()
+                    fallback_choice = default_number_chooser()
                     await self._resolve_ball_locked(fallback_choice, user_timed_out=True)
         except asyncio.CancelledError:
             pass
@@ -791,8 +824,31 @@ class ComputerGameSession:
         )
         self._last_bowler_id = bowler_id
 
-        # Computer generates its choice
-        comp_choice = self._bot.choose_number()
+        # Build situational match context from current match state before ball resolution
+        active_innings = self._match.innings_1 if innings_num == 1 else self._match.innings_2
+        target = self._match.target
+        runs_needed = (
+            (target - active_innings.total_runs)
+            if (innings_num == 2 and target is not None and active_innings is not None)
+            else None
+        )
+        balls_remaining = (
+            (self._match.max_balls - active_innings.total_balls)
+            if active_innings is not None
+            else None
+        )
+        comp_role = "bowl" if user_is_batting else "bat"
+
+        match_context = MatchContext(
+            role=comp_role,
+            target=target,
+            runs_needed=runs_needed,
+            balls_remaining=balls_remaining,
+            innings=innings_num,
+        )
+
+        # Computer generates its choice (strictly before user choice is recorded into bot history)
+        comp_choice = self._bot.choose_number(context=match_context)
 
         if user_is_batting:
             bat_choice = user_choice
@@ -805,7 +861,6 @@ class ComputerGameSession:
         ball_result = resolve_ball(batsman_choice=bat_choice, bowler_choice=bowl_choice)
 
         # Record striker name before ball in case of wicket
-        active_innings = self._match.innings_1 if innings_num == 1 else self._match.innings_2
         striker_id = active_innings.striker if active_innings else 1
         batting_team = self._user_team if user_is_batting else self._opponent_team
         out_player_name = (
@@ -816,6 +871,11 @@ class ComputerGameSession:
 
         # Record ball in pure match engine
         self._match.record_ball(ball_result)
+
+        # Record opponent's revealed choice in history strictly after computer choice was committed
+        if hasattr(self._bot, "record_opponent_choice"):
+            opponent_role = "bat" if user_is_batting else "bowl"
+            self._bot.record_opponent_choice(user_choice, role=opponent_role)
 
         # Update bowler stats using the captured bowler ID
         stats_dict = (

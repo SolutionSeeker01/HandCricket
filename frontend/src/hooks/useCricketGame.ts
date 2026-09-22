@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AppStage,
   BowlerSelectionPrompt,
+  ComputerDifficulty,
   ConnectionStatus,
   EventFeedback,
   MatchState,
@@ -25,12 +26,20 @@ export function useCricketGame() {
   } | null>(null);
 
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('connecting');
+  const [difficulty, setDifficulty] = useState<ComputerDifficulty>('easy');
+  const difficultyRef = useRef<ComputerDifficulty>('easy');
+  const connectedDifficultyRef = useRef<ComputerDifficulty | null>(null);
   const [selectedNumber, setSelectedNumber] = useState<number | null>(null);
   const [isWaiting, setIsWaiting] = useState<boolean>(false);
   const [eventFeedback, setEventFeedback] = useState<EventFeedback | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [turnCountdown, setTurnCountdown] = useState<TurnCountdown | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(() => soundManager.isMuted());
+
+  const setGameDifficulty = useCallback((newDifficulty: ComputerDifficulty) => {
+    setDifficulty(newDifficulty);
+    difficultyRef.current = newDifficulty;
+  }, []);
 
   const socketRef = useRef<WebSocket | null>(null);
   const [milestoneFeedback, setMilestoneFeedback] = useState<MilestoneFeedback | null>(null);
@@ -72,29 +81,38 @@ export function useCricketGame() {
     setIsMuted(next);
   }, []);
 
-  const connect = useCallback(() => {
-    if (
-      socketRef.current &&
-      (socketRef.current.readyState === WebSocket.OPEN ||
-        socketRef.current.readyState === WebSocket.CONNECTING)
-    ) {
-      return;
-    }
+  const connect = useCallback(
+    (targetDiff?: ComputerDifficulty) => {
+      const diffToUse = targetDiff ?? difficultyRef.current;
+      difficultyRef.current = diffToUse;
 
-    if (reconnectAttemptRef.current === 0) {
-      setConnectionStatus('connecting');
-    }
-    setErrorMessage(null);
+      if (
+        socketRef.current &&
+        (socketRef.current.readyState === WebSocket.OPEN ||
+          socketRef.current.readyState === WebSocket.CONNECTING)
+      ) {
+        if (connectedDifficultyRef.current === diffToUse) {
+          return;
+        }
+        socketRef.current.close();
+        socketRef.current = null;
+      }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host =
-      window.location.port === '5173'
-        ? `${window.location.hostname || '127.0.0.1'}:8000`
-        : window.location.host;
-    const wsUrl = `${protocol}//${host}/ws?mode=computer`;
+      if (reconnectAttemptRef.current === 0) {
+        setConnectionStatus('connecting');
+      }
+      setErrorMessage(null);
 
-    const ws = new WebSocket(wsUrl);
-    socketRef.current = ws;
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host =
+        window.location.port === '5173'
+          ? `${window.location.hostname || '127.0.0.1'}:8000`
+          : window.location.host;
+      const wsUrl = `${protocol}//${host}/ws?mode=computer&difficulty=${diffToUse}`;
+
+      connectedDifficultyRef.current = diffToUse;
+      const ws = new WebSocket(wsUrl);
+      socketRef.current = ws;
 
     ws.onopen = () => {
       if (socketRef.current !== ws) return;
@@ -388,6 +406,7 @@ export function useCricketGame() {
       if (socketRef.current === ws) {
         setConnectionStatus('disconnected');
         socketRef.current = null;
+        connectedDifficultyRef.current = null;
         stopCountdown();
 
         // Attempt graceful reconnection with backoff if within a game
@@ -424,21 +443,33 @@ export function useCricketGame() {
     appStageRef.current = 'LANDING';
   }, []);
 
-  const startVsComputer = useCallback(() => {
-    soundManager.preloadAll();
-    setAppStage('PRE_MATCH');
-    appStageRef.current = 'PRE_MATCH';
-    setTossActive(false);
-    tossActiveRef.current = false;
-    setTossOutcome(null);
-    setBowlerSelectionPrompt(null);
-    setMatchState(null);
-    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
-      connect();
-    } else {
-      socketRef.current.send(JSON.stringify({ type: 'reset_pre_match' }));
-    }
-  }, [connect]);
+  const startVsComputer = useCallback(
+    (selectedDifficulty?: ComputerDifficulty) => {
+      soundManager.preloadAll();
+      setAppStage('PRE_MATCH');
+      appStageRef.current = 'PRE_MATCH';
+      setTossActive(false);
+      tossActiveRef.current = false;
+      setTossOutcome(null);
+      setBowlerSelectionPrompt(null);
+      setMatchState(null);
+
+      const diffToUse = selectedDifficulty ?? difficultyRef.current;
+      setDifficulty(diffToUse);
+      difficultyRef.current = diffToUse;
+
+      if (
+        !socketRef.current ||
+        socketRef.current.readyState !== WebSocket.OPEN ||
+        connectedDifficultyRef.current !== diffToUse
+      ) {
+        connect(diffToUse);
+      } else {
+        socketRef.current.send(JSON.stringify({ type: 'reset_pre_match' }));
+      }
+    },
+    [connect]
+  );
 
   const goToLanding = useCallback(() => {
     if (feedbackTimeoutRef.current) {
@@ -653,8 +684,14 @@ export function useCricketGame() {
     };
   }, [connect, stopCountdown]);
 
+  const reconnect = useCallback(() => {
+    connect();
+  }, [connect]);
+
   return {
     appStage,
+    difficulty,
+    setDifficulty: setGameDifficulty,
     preMatchState,
     tossActive,
     tossOutcome,
@@ -680,7 +717,7 @@ export function useCricketGame() {
     submitNumber,
     startNextInnings,
     resetGame,
-    reconnect: connect,
+    reconnect,
   };
 }
 
